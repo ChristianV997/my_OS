@@ -2,6 +2,7 @@ import random
 
 from backend.decision.scoring import causal_score
 from backend.learning.signals import roas_velocity, roas_acceleration, advantage
+from backend.learning.bandit_update import bandit_weight
 
 
 def decide(state):
@@ -23,11 +24,12 @@ def decide(state):
 
         velocity_bonus = vel + acc
 
-        # placeholder counterfactual baseline
         cf = world_pred * 0.9
         adv = advantage(world_pred, cf)
 
-        score = world_pred + c_score + velocity_bonus + adv
+        bandit_w = bandit_weight(action, state.graph)
+
+        score = world_pred + c_score + velocity_bonus + adv + bandit_w
 
         decisions.append({
             "action": action,
@@ -37,7 +39,8 @@ def decide(state):
                 "causal": c_score,
                 "velocity": vel,
                 "acceleration": acc,
-                "advantage": adv
+                "advantage": adv,
+                "bandit": bandit_w
             }
         })
 
