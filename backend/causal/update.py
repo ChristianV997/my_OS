@@ -74,8 +74,11 @@ def _dowhy_update(graph, data, state=None):
     if "roas" not in df.columns or len(df) < 20:
         return _correlation_fallback(graph, data, state)
 
+    # Restrict treatments to plausible intervention/assignment variables.
+    # Outcome-derived performance metrics like cost, revenue, and orders should
+    # not be treated as interventions when estimating effects on ROAS.
     candidate_treatments = [
-        c for c in ["variant", "intensity", "cost", "revenue", "orders", "campaign_id"]
+        c for c in ["variant", "intensity", "campaign_id"]
         if c in df.columns and c != "roas"
     ]
     if not candidate_treatments:
