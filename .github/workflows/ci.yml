@@ -5,47 +5,78 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+  workflow_dispatch:
+  schedule:
+    - cron: '0 */6 * * *'
 
 jobs:
-  test:
+  lightweight_ci:
     runs-on: ubuntu-latest
     env:
       PYTHONPATH: ${{ github.workspace }}
-
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-
       - name: Install dependencies (tolerant)
         run: |
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt || true; fi
           pip install pytest || true
-
       - name: Compile check
         run: python -m compileall -q .
-
-      - name: Run tests (optional)
-        run: |
-          if [ -d tests ]; then pytest tests/ -v || true; else echo "No tests dir"; fi
-
-      - name: Smoke run (updated)
+      - name: Smoke run
         run: |
           python - << 'PY'
           from backend.core.system_v5 import SystemV5
           from backend.decision.engine import decide
+          class DummyEnv:
+              def execute(self, action):
+                  return {"roas":1.0, "revenue":100.0, "orders":1, "cost":50.0}
+          s = SystemV5()
+          for _ in range(3): s.run_cycle(DummyEnv(), decide)
+          print('LIGHT_OK')
+          PY
+
+  strict_ci:
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          pip install numpy pytest
+      - name: Intelligence checks
+        run: |
+          python - << 'PY'
+          import numpy as np
+          from backend.core.system_v5 import SystemV5
+          from backend.decision.engine import decide
+          from backend.learning.campaign_learning import campaign_learning
 
           class DummyEnv:
               def execute(self, action):
-                  return {"roas": 1.0, "revenue": 100.0, "orders": 1, "cost": 50.0}
+                  return {"roas": np.random.uniform(0.5,1.5), "revenue":100.0, "orders":1, "cost":50.0}
 
           s = SystemV5()
-          # run a few cycles using new API
-          for _ in range(3):
-              s.run_cycle(DummyEnv(), decide)
+          preds = []
 
-          print("OK — smoke passed")
+          for _ in range(20):
+              results = s.run_cycle(DummyEnv(), decide)
+              for r in results:
+                  preds.append(r.get('prediction',0))
+
+          assert np.std(preds) > 0.0001, 'World model predictions constant'
+          assert len(campaign_learning.history) > 0, 'Campaign learning not updating'
+          assert len(s.state.strategies) > 0, 'No strategies present'
+
+          print('STRICT_OK')
           PY
