@@ -32,6 +32,9 @@ ok = compileall.compile_dir('.', force=True, quiet=1)
 sys.exit(0 if ok else 1)
 PY
 
+      - name: Run tests
+        run: pytest -v
+
       - name: Smoke run (5 cycles)
         run: |
           python - << 'PY'

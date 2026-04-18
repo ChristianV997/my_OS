@@ -10,4 +10,5 @@ class SystemState:
         self.energy = {"fatigue": 0.1, "load": 0.2}
         self.population = []
         self.regime = "neutral"
-        self.capital = 1000
+        self.capital = 1000.0
+        self.memory = []

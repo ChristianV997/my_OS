@@ -1,5 +1,5 @@
-from core.state import SystemState
-from execution.loop import run_cycle
+from backend.core.state import SystemState
+from backend.execution.loop import run_cycle
 
 
 def main():
