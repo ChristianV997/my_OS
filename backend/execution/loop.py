@@ -3,6 +3,8 @@ import time
 from backend.decision.engine import decide
 from backend.learning.delayed_rewards import DelayedRewardStore
 from backend.learning.bandit_update import update_from_delayed
+from backend.learning.update import learn
+from backend.causal.update import update_causal
 
 
 store = DelayedRewardStore()
@@ -15,7 +17,9 @@ def execute(decisions, state):
 
         outcome = {"roas": 1.2, "revenue": 100, "cost": 80}
 
-        # log for delayed evaluation
+        # attach action context
+        outcome.update(d.get("action", {}))
+
         store.log(d["action"], outcome)
 
         results.append(outcome)
@@ -25,7 +29,6 @@ def execute(decisions, state):
 
 def process_delayed():
 
-    # simulate different horizons (seconds for now)
     delays = [5, 10, 20]
 
     for d in delays:
@@ -42,7 +45,13 @@ def run_cycle(state):
 
     state.event_log.log_batch(results)
 
-    # process delayed rewards each cycle
+    # learning layer (signals)
+    state = learn(state, results)
+
+    # causal update
+    state.graph = update_causal(state.graph, state.event_log)
+
+    # delayed rewards
     process_delayed()
 
     return state
