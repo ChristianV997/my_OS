@@ -1,0 +1,29 @@
+name: CI Failure Artifact Export
+
+on:
+  workflow_run:
+    workflows: ["Simulation + Market Validation"]
+    types:
+      - completed
+
+jobs:
+  export_artifacts:
+    if: ${{ github.event.workflow_run.conclusion == 'failure' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Prepare artifacts
+        run: |
+          mkdir -p artifacts
+          cp backend/simulation/replay_log.json artifacts/ || echo "no replay log"
+          cp backend/simulation/reality_gap.json artifacts/ || echo "no reality gap summary"
+          cp backend/simulation/reality_gap_log.jsonl artifacts/ || echo "no gap log"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: failure-debug-artifacts
+          path: artifacts/
