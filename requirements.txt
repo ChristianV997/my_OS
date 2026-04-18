@@ -1,5 +1,6 @@
 numpy
 scikit-learn
+statsmodels
 fastapi
 uvicorn
 pytest

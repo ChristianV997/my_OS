@@ -14,11 +14,16 @@ from backend.regime.confidence import regime_confidence
 from backend.agents.structural_evolution import structural_engine
 from backend.agents.self_healing import self_healing_engine
 from backend.simulation.reality_gap import reality_gap_engine
+import backend.ci.hyperparam_meta as hp_meta
 
 store = DelayedRewardStore()
 
 # Stochastic market environment — regime-driven trend with noise
 ENV = {"trend": 0.0, "regime": "stable"}
+
+# Hyperparameter meta-learning state (persisted to JSON file)
+_hp_meta_state = hp_meta.load_hp_meta()
+_prev_avg_roas: float | None = None
 
 TOTAL_CYCLE_BUDGET = 500.0  # total spend per cycle, split across all decisions
 
@@ -127,12 +132,27 @@ def run_cycle(state):
 
     process_delayed()
 
-    # structural evolution every 10 cycles
+    # structural evolution + hyperparam meta-learning every 10 cycles
     if state.total_cycles % 10 == 0 and state.total_cycles > 0:
+        global _hp_meta_state, _prev_avg_roas
+
         structural_engine.evolve()
         avg_roas = (sum(r.get("roas", 0) for r in results) / max(len(results), 1))
         diversity = _population_diversity()
         self_healing_engine.heal(avg_roas, diversity, structural_engine)
+
+        # compute improvement vs. previous 10-cycle window
+        improvement = (avg_roas - _prev_avg_roas) if _prev_avg_roas is not None else 0.0
+        _prev_avg_roas = avg_roas
+
+        # update hyperparameter meta-learning and apply best params
+        _hp_meta_state = hp_meta.step(
+            _hp_meta_state,
+            regime=state.detected_regime,
+            improvement=improvement,
+            evolution_engine=structural_engine,
+        )
+        hp_meta.save_hp_meta(_hp_meta_state)
 
     state.total_cycles += 1
     return state

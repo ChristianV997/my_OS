@@ -1,45 +1,88 @@
+"""
+Causal graph updater using Granger causality.
+
+For each numeric feature X in the last `_WINDOW` event-log rows we test:
+  H0: X_lagged does NOT help predict ROAS beyond ROAS_lagged alone  (AR(1) null)
+  H1: X_lagged + ROAS_lagged jointly predict ROAS better  (VAR(1) alternative)
+
+We use the statsmodels F-test at lag=1.  Features with p < ALPHA get a directed
+causal edge X → roas with weight = -log10(p), giving stronger edges to more
+significant relationships.
+
+Pearson correlation (|r| > PEARSON_FLOOR) is used as a cheap pre-filter to
+skip obviously uncorrelated features before the heavier Granger test.
+
+Requires ≥ MIN_ROWS rows so the VAR(1) regression is numerically stable.
+"""
+import logging
+
 import numpy as np
+from statsmodels.tsa.stattools import grangercausalitytests
+
+logger = logging.getLogger(__name__)
+
+_WINDOW = 100       # rows used per update
+_MIN_ROWS = 20      # minimum rows needed for a reliable Granger test
+_LAG = 1            # test lag-1 Granger causality
+_ALPHA = 0.10       # significance threshold for the F-test
+_PEARSON_FLOOR = 0.03  # fast pre-filter: skip features below this Pearson |r|
 
 
 def update_causal(graph, event_log):
+    data = event_log.rows[-_WINDOW:]
 
-    data = event_log.rows[-100:]
-
-    if len(data) < 10:
+    if len(data) < _MIN_ROWS:
         return graph
 
     all_keys = list(data[0].keys())
 
     # keep only numeric-valued keys
-    keys = []
+    numeric_keys = []
     for k in all_keys:
         try:
-            [float(row.get(k, 0)) for row in data]
-            keys.append(k)
+            vals = [float(row.get(k, 0)) for row in data]
+            if not any(np.isnan(v) or np.isinf(v) for v in vals):
+                numeric_keys.append(k)
         except (TypeError, ValueError):
             pass
 
-    if not keys:
+    if "roas" not in numeric_keys:
         return graph
 
-    # build matrix
-    matrix = np.array([[float(row.get(k, 0)) for k in keys] for row in data])
+    # build feature matrix
+    matrix = np.array(
+        [[float(row.get(k, 0)) for k in numeric_keys] for row in data]
+    )
 
-    # compute correlations with roas
-    if "roas" not in keys:
-        return graph
-
-    roas_idx = keys.index("roas")
+    roas_idx = numeric_keys.index("roas")
     roas_col = matrix[:, roas_idx]
 
-    for i, k in enumerate(keys):
+    for i, k in enumerate(numeric_keys):
         if k == "roas":
             continue
+
         x = matrix[:, i]
-        if np.std(x) == 0 or np.std(roas_col) == 0:
+
+        # skip constant features
+        if np.std(x) < 1e-9 or np.std(roas_col) < 1e-9:
             continue
+
+        # fast Pearson pre-filter
         corr = float(np.corrcoef(x, roas_col)[0, 1])
-        if not np.isnan(corr) and abs(corr) > 0.05:
-            graph.add_edge(k, "roas", corr)
+        if np.isnan(corr) or abs(corr) < _PEARSON_FLOOR:
+            continue
+
+        # Granger causality F-test: does x_{t-1} help predict roas_t?
+        try:
+            test_data = np.column_stack([roas_col, x])
+            result = grangercausalitytests(test_data, maxlag=_LAG, verbose=False)
+            p_value = result[_LAG][0]["ssr_ftest"][1]  # F-test p-value
+
+            if p_value < _ALPHA:
+                # weight = -log10(p) so stronger significance → higher weight
+                weight = round(-np.log10(max(p_value, 1e-10)), 4)
+                graph.add_edge(k, "roas", weight)
+        except Exception as exc:
+            logger.debug("Granger test skipped for %s: %s", k, exc)
 
     return graph
