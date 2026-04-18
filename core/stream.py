@@ -24,8 +24,11 @@ if redis is not None:  # pragma: no cover
 def publish(event):
     payload = json.dumps(event)
     if _r is not None:  # pragma: no cover
-        _r.xadd(STREAM, {"data": payload})
-        return
+        try:
+            _r.xadd(STREAM, {"data": payload})
+            return
+        except Exception:
+            pass
 
     with _QUEUE_LOCK:
         _queue.append(("local", {"data": payload}))

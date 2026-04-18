@@ -12,7 +12,12 @@ def run_once():
 
     for _, messages in events:
         for _, payload in messages:
-            store_event(json.loads(payload["data"]))
+            try:
+                parsed = json.loads(payload["data"])
+            except (TypeError, json.JSONDecodeError):
+                continue
+
+            store_event(parsed)
             stored += 1
 
     return stored

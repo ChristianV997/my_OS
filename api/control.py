@@ -1,4 +1,5 @@
 from fastapi import APIRouter
+from fastapi import HTTPException
 
 router = APIRouter()
 
@@ -23,6 +24,8 @@ def resume(product_id: str):
 
 @router.post("/budget/{product_id}")
 def override_budget(product_id: str, budget: float):
+    if budget <= 0:
+        raise HTTPException(status_code=400, detail="budget must be positive")
     STATE["manual_budgets"][product_id] = budget
     return {"status": "updated"}
 

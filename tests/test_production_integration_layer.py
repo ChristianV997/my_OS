@@ -1,4 +1,7 @@
-from api.control import STATE, approve, pause, resume
+import pytest
+from fastapi import HTTPException
+
+from api.control import STATE, approve, override_budget, pause, resume
 from agents.human_gate import can_launch
 from backend.core.state import SystemState
 from backend.execution.loop import run_cycle
@@ -57,3 +60,6 @@ def test_control_gate_and_anomaly_rules():
     alerts = detect({"product_name": "x", "roas": 0.6, "spend": 60})
     assert "ROAS_DROP" in alerts
     assert "SPEND_SPIKE" in alerts
+
+    with pytest.raises(HTTPException):
+        override_budget(product_id, 0)

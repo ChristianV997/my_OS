@@ -27,6 +27,8 @@ from monitoring.realtime_alerts import process_event
 store = DelayedRewardStore()
 ENV = {"trend": 0.0, "regime": "stable"}
 SCALE_DOWN_FACTOR = 0.7
+CLICKS_PER_DOLLAR = 2
+EXPECTED_CTR = 0.02
 
 
 def execute(decisions, state):
@@ -56,8 +58,8 @@ def execute(decisions, state):
         campaign_revenue = (campaign_spend / max(total_spend, 1)) * total_revenue
 
         roas = campaign_revenue / max(campaign_spend, 1)
-        clicks = max(1, int(campaign_spend * 2))
-        impressions = max(clicks, int(clicks / 0.02))
+        clicks = max(1, int(campaign_spend * CLICKS_PER_DOLLAR))
+        impressions = max(clicks, int(clicks / EXPECTED_CTR))
         conversions = max(1, int(order_count * (campaign_spend / max(total_spend, 1))))
         ctr = clicks / max(impressions, 1)
         cvr = conversions / max(clicks, 1)
