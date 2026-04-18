@@ -54,10 +54,11 @@ jobs:
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
           pip install numpy pytest
-      - name: Intelligence + Regime Regression Checks
+      - name: Intelligence + Regime Regression + Meta Tracking
         run: |
           python - << 'PY'
           import numpy as np
+
           from backend.core.system_v5 import SystemV5
           from backend.decision.engine import decide
           from backend.learning.campaign_learning import campaign_learning
@@ -69,6 +70,8 @@ jobs:
               update_baseline,
               detect_regime
           )
+          from backend.ci.meta_performance import load_meta, save_meta, step
+          from backend.agents.evolution import evolution_engine
 
           class DummyEnv:
               def execute(self, action):
@@ -106,5 +109,10 @@ jobs:
           baseline = update_baseline(baseline, regime, current)
           save_baseline(baseline)
 
-          print(f'STRICT_OK | regime={regime} | metrics={current}')
+          # meta-performance tracking
+          meta = load_meta()
+          meta, status = step(meta, regime, current, evolution_engine=evolution_engine)
+          save_meta(meta)
+
+          print(f'STRICT_OK | regime={regime} | metrics={current} | status={status}')
           PY
