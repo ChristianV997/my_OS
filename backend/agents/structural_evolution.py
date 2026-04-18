@@ -21,6 +21,7 @@ STRUCTURE_SPACE = {
 
 DIVERSITY_THRESHOLD = 0.15
 SIMILARITY_PENALTY = 0.3
+NOVELTY_WEIGHT = 0.4
 
 
 def _new_id():
@@ -43,14 +44,16 @@ def blend_multi(weights_list):
     return {k: sum(w[k] for w in weights_list) / len(weights_list) for k in keys}
 
 
-def structure_similarity(a, b):
-    # weight distance
+def structure_distance(a, b):
     w_diff = sum(abs(a["weights"][k] - b["weights"][k]) for k in a["weights"]) / len(a["weights"])
+    f_diff = sum(1 for f in a["features"] if a["features"][f] != b["features"][f]) / len(a["features"])
+    return 0.5 * w_diff + 0.5 * f_diff
 
-    # feature overlap
-    f_overlap = sum(1 for f in a["features"] if a["features"][f] == b["features"][f]) / len(a["features"])
 
-    return (1 - w_diff) * 0.5 + f_overlap * 0.5
+def novelty_score(structure, archive):
+    if not archive:
+        return 1.0
+    return sum(structure_distance(structure, s) for s in archive) / len(archive)
 
 
 def mutate_structure(structure, global_knowledge=None, intensity=0.1):
@@ -85,6 +88,7 @@ def mutate_structure(structure, global_knowledge=None, intensity=0.1):
 class StructuralEvolution:
     def __init__(self):
         self.population = []
+        self.archive = []
         self.scores = defaultdict(list)
         self.lineage_scores = defaultdict(list)
         self.global_knowledge = None
@@ -97,6 +101,7 @@ class StructuralEvolution:
         pid = structure.get("parent_id")
 
         self.scores[sid].append(performance)
+        self.archive.append(structure)
 
         mem = structure.setdefault("memory", {"avg_perf": 0.0, "count": 0})
         mem["count"] += 1
@@ -118,7 +123,7 @@ class StructuralEvolution:
         for other in self.population:
             if other["id"] == structure["id"]:
                 continue
-            sim = structure_similarity(structure, other)
+            sim = 1 - structure_distance(structure, other)
             if sim > (1 - DIVERSITY_THRESHOLD):
                 penalties.append(sim)
         return sum(penalties) * SIMILARITY_PENALTY
@@ -127,9 +132,11 @@ class StructuralEvolution:
         ranked = []
         for s in self.population:
             sid = s.get("id")
-            base_score = self.avg_score(sid) + 0.5 * self.lineage_score(sid)
+            perf = self.avg_score(sid) + 0.5 * self.lineage_score(sid)
+            novelty = novelty_score(s, self.archive)
             penalty = self.diversity_penalty(s)
-            score = base_score - penalty
+
+            score = perf + NOVELTY_WEIGHT * novelty - penalty
             ranked.append((s, score))
 
         ranked.sort(key=lambda x: x[1], reverse=True)
@@ -156,7 +163,7 @@ class StructuralEvolution:
     def enforce_diversity(self, population):
         diverse = []
         for s in population:
-            if all(structure_similarity(s, d) < (1 - DIVERSITY_THRESHOLD) for d in diverse):
+            if all(structure_distance(s, d) > DIVERSITY_THRESHOLD for d in diverse):
                 diverse.append(s)
         return diverse
 
@@ -170,7 +177,6 @@ class StructuralEvolution:
             for _ in range(3):
                 new_pop.append(mutate_structure(b, self.global_knowledge))
 
-        # enforce diversity
         self.population = self.enforce_diversity(new_pop)[:10]
 
 
