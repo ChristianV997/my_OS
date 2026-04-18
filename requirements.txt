@@ -6,5 +6,6 @@ pytest
 httpx
 requests
 duckdb
+mapie
 # Optional — only needed for live Shopify integration
 # ShopifyAPI

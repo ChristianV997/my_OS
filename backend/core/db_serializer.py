@@ -38,22 +38,26 @@ _DDL = [
         saved_at        TIMESTAMP DEFAULT current_timestamp
     )""",
     """CREATE TABLE IF NOT EXISTS event_log (
-        id           BIGINT DEFAULT nextval('event_log_seq'),
-        roas         REAL,
-        roas_6h      REAL,
-        roas_12h     REAL,
-        roas_24h     REAL,
-        revenue      REAL,
-        cost         REAL,
-        prediction   REAL,
-        error        REAL,
-        env_regime   TEXT,
-        env_trend    REAL,
-        velocity     REAL,
-        acceleration REAL,
-        advantage    REAL,
-        variant      TEXT,
-        extra_json   TEXT
+        id             BIGINT DEFAULT nextval('event_log_seq'),
+        roas           REAL,
+        roas_6h        REAL,
+        roas_12h       REAL,
+        roas_24h       REAL,
+        revenue        REAL,
+        cost           REAL,
+        prediction     REAL,
+        error          REAL,
+        pred_lo        REAL,
+        pred_hi        REAL,
+        pred_width     REAL,
+        interval_conf  REAL,
+        env_regime     TEXT,
+        env_trend      REAL,
+        velocity       REAL,
+        acceleration   REAL,
+        advantage      REAL,
+        variant        TEXT,
+        extra_json     TEXT
     )""",
     """CREATE TABLE IF NOT EXISTS memory_rows (
         pos      INTEGER,
@@ -86,6 +90,7 @@ _DDL = [
 _KNOWN_COLS = {
     "roas", "roas_6h", "roas_12h", "roas_24h",
     "revenue", "cost", "prediction", "error",
+    "pred_lo", "pred_hi", "pred_width", "interval_conf",
     "env_regime", "env_trend",
     "velocity", "acceleration", "advantage", "variant",
 }
@@ -110,6 +115,10 @@ def _row_to_record(row: dict) -> tuple:
         row.get("cost"),
         row.get("prediction"),
         row.get("error"),
+        row.get("pred_lo"),
+        row.get("pred_hi"),
+        row.get("pred_width"),
+        row.get("interval_conf"),
         row.get("env_regime"),
         row.get("env_trend"),
         row.get("velocity"),
@@ -121,13 +130,10 @@ def _row_to_record(row: dict) -> tuple:
 
 
 def _record_to_row(rec) -> dict:
-    # rec columns: id, roas, roas_6h, roas_12h, roas_24h,
-    #              revenue, cost, prediction, error,
-    #              env_regime, env_trend,
-    #              velocity, acceleration, advantage, variant, extra_json
     cols = [
         "id", "roas", "roas_6h", "roas_12h", "roas_24h",
         "revenue", "cost", "prediction", "error",
+        "pred_lo", "pred_hi", "pred_width", "interval_conf",
         "env_regime", "env_trend",
         "velocity", "acceleration", "advantage", "variant", "extra_json",
     ]
@@ -172,9 +178,10 @@ def save(state: SystemState, path: str) -> None:
                 """INSERT INTO event_log
                    (roas, roas_6h, roas_12h, roas_24h,
                     revenue, cost, prediction, error,
+                    pred_lo, pred_hi, pred_width, interval_conf,
                     env_regime, env_trend,
                     velocity, acceleration, advantage, variant, extra_json)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 records,
             )
 

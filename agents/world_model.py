@@ -1,5 +1,14 @@
 import numpy as np
 from sklearn.linear_model import Ridge
+from mapie.regression import SplitConformalRegressor
+
+# Minimum rows needed so calibration set has ≥ 1/alpha = 10 samples
+# at 40% cal split: need ≥ 10/0.4 = 25 rows; use 30 for margin
+_MIN_ROWS = 30
+# Fraction used for the conformalization set
+_CALIB_FRAC = 0.4
+# 90% marginal coverage guarantee (requires ≥ 10 calibration samples)
+_CONFIDENCE = 0.9
 
 
 class WorldModel:
@@ -7,15 +16,17 @@ class WorldModel:
     HORIZONS = ["6h", "12h", "24h"]
 
     def __init__(self):
-        self._models = {}
-        self._fitted = set()
+        # per-horizon: fitted Ridge (for point prediction) + SplitConformal (for intervals)
+        self._ridge: dict[str, Ridge] = {}
+        self._conformal: dict[str, SplitConformalRegressor] = {}
+        self._fitted: set[str] = set()
 
-    def _featurize(self, action):
+    def _featurize(self, action: dict) -> np.ndarray:
         return np.array([float(v) for v in action.values()], dtype=float)
 
-    def train(self, event_log):
+    def train(self, event_log) -> None:
         rows = event_log.rows
-        if len(rows) < 20:
+        if len(rows) < _MIN_ROWS:
             return
 
         features, targets = [], {h: [] for h in self.HORIZONS}
@@ -28,19 +39,78 @@ class WorldModel:
             targets["24h"].append(r.get("roas_24h", base))
 
         X = np.array(features)
-        for h, y in targets.items():
-            m = Ridge(alpha=1.0)
-            m.fit(X, np.array(y))
-            self._models[h] = m
+        n = len(X)
+        split = max(1, int(n * (1 - _CALIB_FRAC)))
+        X_train, X_cal = X[:split], X[split:]
+
+        for h in self.HORIZONS:
+            y = np.array(targets[h])
+            y_train, y_cal = y[:split], y[split:]
+
+            # 1. fit Ridge on train split
+            ridge = Ridge(alpha=1.0)
+            ridge.fit(X_train, y_train)
+            self._ridge[h] = ridge
+
+            # 2. wrap fitted Ridge in SplitConformalRegressor + conformalize
+            conformal = SplitConformalRegressor(
+                estimator=ridge,
+                prefit=True,
+                confidence_level=_CONFIDENCE,
+            )
+            conformal.conformalize(X_cal, y_cal)
+            self._conformal[h] = conformal
             self._fitted.add(h)
 
-    def predict(self, action):
+    def predict(self, action: dict) -> dict:
+        """
+        Returns point estimates + 90%-coverage conformal prediction intervals.
+
+        Keys:
+            roas_6h, roas_12h, roas_24h           — point estimates
+            lo_6h,   lo_12h,   lo_24h             — interval lower bounds
+            hi_6h,   hi_12h,   hi_24h             — interval upper bounds
+            width_6h, width_12h, width_24h         — interval widths (uncertainty proxy)
+        """
         x = self._featurize(action).reshape(1, -1)
-        return {
-            f"roas_{h}": float(self._models[h].predict(x)[0])
-            if h in self._fitted else 1.0
-            for h in self.HORIZONS
-        }
+        result = {}
+
+        for h in self.HORIZONS:
+            if h not in self._fitted:
+                result[f"roas_{h}"] = 1.0
+                result[f"lo_{h}"] = 0.7
+                result[f"hi_{h}"] = 1.3
+                result[f"width_{h}"] = 0.6  # wide default = high uncertainty
+                continue
+
+            pt = float(self._ridge[h].predict(x)[0])
+            try:
+                _, intervals = self._conformal[h].predict_interval(x)
+                lo = float(intervals[0, 0, 0])
+                hi = float(intervals[0, 1, 0])
+            except ValueError:
+                # calibration set too small for the requested confidence level
+                lo = pt - 0.3
+                hi = pt + 0.3
+
+            result[f"roas_{h}"] = pt
+            result[f"lo_{h}"] = lo
+            result[f"hi_{h}"] = hi
+            result[f"width_{h}"] = max(0.0, hi - lo)
+
+        return result
+
+    @property
+    def mean_uncertainty(self) -> float:
+        """Mean interval width across fitted horizons — 0 if not yet fitted."""
+        if not self._fitted:
+            return 1.0
+        widths = []
+        dummy = self._featurize({"variant": 1}).reshape(1, -1)
+        for h in self._fitted:
+            _, ivs = self._conformal[h].predict_interval(dummy)
+            widths.append(max(0.0, float(ivs[0, 1, 0]) - float(ivs[0, 0, 0])))
+        return sum(widths) / len(widths)
 
 
 world_model = WorldModel()

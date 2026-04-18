@@ -67,16 +67,20 @@ def execute(decisions, state):
         calibration_model.update(pred, roas)
 
         outcome = {
-            "roas":       round(roas, 4),
-            "roas_6h":    round(max(0.01, roas * random.uniform(0.70, 0.95)), 4),
-            "roas_12h":   round(max(0.01, roas * random.uniform(0.85, 1.05)), 4),
-            "roas_24h":   round(max(0.01, roas * random.uniform(0.90, 1.10)), 4),
-            "revenue":    round(revenue, 2),
-            "cost":       cost,
-            "prediction": round(pred, 4),
-            "error":      round(pred - roas, 4),
-            "env_regime": ENV["regime"],
-            "env_trend":  round(ENV["trend"], 4),
+            "roas":         round(roas, 4),
+            "roas_6h":      round(max(0.01, roas * random.uniform(0.70, 0.95)), 4),
+            "roas_12h":     round(max(0.01, roas * random.uniform(0.85, 1.05)), 4),
+            "roas_24h":     round(max(0.01, roas * random.uniform(0.90, 1.10)), 4),
+            "revenue":      round(revenue, 2),
+            "cost":         cost,
+            "prediction":   round(pred, 4),
+            "error":        round(pred - roas, 4),
+            "pred_lo":      d.get("pred_lo"),
+            "pred_hi":      d.get("pred_hi"),
+            "pred_width":   d.get("pred_width"),
+            "interval_conf": d.get("interval_conf"),
+            "env_regime":   ENV["regime"],
+            "env_trend":    round(ENV["trend"], 4),
         }
         outcome.update(action)
 
