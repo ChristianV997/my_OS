@@ -14,7 +14,7 @@ def test_meta_ads_fallback_without_credentials(monkeypatch):
 def test_shopify_fallback_without_sdk(monkeypatch):
     monkeypatch.setattr(shopify_client, "shopify", None)
     monkeypatch.setattr(shopify_client, "SHOP_URL", "example.myshopify.com")
-    monkeypatch.setattr(shopify_client, "ACCESS_TOKEN", "token")
+    monkeypatch.setattr(shopify_client, "ACCESS_TOKEN", "test_invalid_token")
     orders = shopify_client.get_orders(last_n_minutes=10)
     assert len(orders) > 0
 
