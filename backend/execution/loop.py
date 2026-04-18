@@ -1,4 +1,5 @@
 import time
+import random
 
 from backend.decision.engine import decide
 from backend.learning.delayed_rewards import DelayedRewardStore
@@ -10,15 +11,63 @@ from backend.causal.update import update_causal
 
 store = DelayedRewardStore()
 
+# global environment state
+ENV = {
+    "trend": 0.0,
+    "regime": "stable"
+}
+
+
+def simulate_environment():
+
+    # regime shift
+    if random.random() < 0.05:
+        ENV["regime"] = random.choice(["growth", "decay", "volatile"])
+
+    # trend dynamics
+    if ENV["regime"] == "growth":
+        ENV["trend"] += random.uniform(0.01, 0.05)
+    elif ENV["regime"] == "decay":
+        ENV["trend"] -= random.uniform(0.01, 0.05)
+    elif ENV["regime"] == "volatile":
+        ENV["trend"] += random.uniform(-0.1, 0.1)
+
+    # clamp trend
+    ENV["trend"] = max(-1, min(1, ENV["trend"]))
+
+    return ENV
+
+
+def generate_roas():
+
+    env = simulate_environment()
+
+    base = 1.0
+
+    # noise
+    noise = random.uniform(-0.3, 0.3)
+
+    # delayed effect simulation
+    delayed = random.uniform(-0.1, 0.1)
+
+    roas = base + env["trend"] + noise + delayed
+
+    return max(0.1, roas)
+
 
 def execute(decisions, state):
     results = []
 
     for d in decisions:
 
-        outcome = {"roas": 1.2, "revenue": 100, "cost": 80}
+        roas = generate_roas()
 
-        # attach action context
+        outcome = {
+            "roas": roas,
+            "revenue": 100 * roas,
+            "cost": 100
+        }
+
         outcome.update(d.get("action", {}))
 
         # calibration update
@@ -26,9 +75,10 @@ def execute(decisions, state):
         actual = outcome.get("roas", 0)
         calibration_model.update(pred, actual)
 
-        # store error for learning visibility
         outcome["prediction"] = pred
         outcome["error"] = pred - actual
+        outcome["regime"] = ENV["regime"]
+        outcome["trend"] = ENV["trend"]
 
         store.log(d["action"], outcome)
 
@@ -55,13 +105,10 @@ def run_cycle(state):
 
     state.event_log.log_batch(results)
 
-    # learning layer (signals)
     state = learn(state, results)
 
-    # causal update
     state.graph = update_causal(state.graph, state.event_log)
 
-    # delayed rewards
     process_delayed()
 
     return state
