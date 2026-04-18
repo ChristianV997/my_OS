@@ -14,7 +14,10 @@ skip obviously uncorrelated features before the heavier Granger test.
 
 Requires ≥ MIN_ROWS rows so the VAR(1) regression is numerically stable.
 """
+import io
 import logging
+import os
+import sys
 
 import numpy as np
 from statsmodels.tsa.stattools import grangercausalitytests
@@ -75,7 +78,13 @@ def update_causal(graph, event_log):
         # Granger causality F-test: does x_{t-1} help predict roas_t?
         try:
             test_data = np.column_stack([roas_col, x])
-            result = grangercausalitytests(test_data, maxlag=_LAG, verbose=False)
+            # suppress the printed table statsmodels writes to stdout
+            _sink = io.StringIO()
+            _old_stdout, sys.stdout = sys.stdout, _sink
+            try:
+                result = grangercausalitytests(test_data, maxlag=_LAG)
+            finally:
+                sys.stdout = _old_stdout
             p_value = result[_LAG][0]["ssr_ftest"][1]  # F-test p-value
 
             if p_value < _ALPHA:
