@@ -16,7 +16,7 @@ def test_run_cycle_emits_real_feedback_metrics_and_profit():
     assert "cvr" in row
     assert "cac" in row
     assert "profit" in row
-    assert "spend" in row
+    assert "cost" in row
     assert row["profit"] == round(row["revenue"] - row["cost"], 2)
 
 

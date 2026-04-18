@@ -76,7 +76,6 @@ def execute(decisions, state):
             "revenue": round(campaign_revenue, 2),
             "orders": order_count,
             "cost": campaign_spend,
-            "spend": campaign_spend,
             "profit": round(profit, 2),
             "ctr": round(ctr, 4),
             "cvr": round(cvr, 4),

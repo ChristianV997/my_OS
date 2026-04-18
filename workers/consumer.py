@@ -1,4 +1,5 @@
 import json
+import signal
 import time
 
 from core.storage import store_event
@@ -18,6 +19,14 @@ def run_once():
 
 
 def run(poll_seconds=1):
-    while True:
+    stop = {"value": False}
+
+    def _stop_handler(_signum, _frame):
+        stop["value"] = True
+
+    signal.signal(signal.SIGINT, _stop_handler)
+    signal.signal(signal.SIGTERM, _stop_handler)
+
+    while not stop["value"]:
         run_once()
         time.sleep(poll_seconds)

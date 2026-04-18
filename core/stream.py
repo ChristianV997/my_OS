@@ -1,4 +1,5 @@
 import json
+import threading
 
 try:  # pragma: no cover
     import redis
@@ -10,6 +11,7 @@ STREAM = "upos_events"
 
 _r = None
 _queue = []
+_QUEUE_LOCK = threading.Lock()
 
 if redis is not None:  # pragma: no cover
     try:
@@ -25,7 +27,8 @@ def publish(event):
         _r.xadd(STREAM, {"data": payload})
         return
 
-    _queue.append(("local", {"data": payload}))
+    with _QUEUE_LOCK:
+        _queue.append(("local", {"data": payload}))
 
 
 def consume(group="workers", consumer="c1"):
@@ -36,9 +39,9 @@ def consume(group="workers", consumer="c1"):
             pass
         return _r.xreadgroup(group, consumer, {STREAM: ">"}, count=10, block=1000)
 
-    if not _queue:
-        return []
-
-    messages = list(_queue)
-    _queue.clear()
+    with _QUEUE_LOCK:
+        if not _queue:
+            return []
+        messages = list(_queue)
+        _queue.clear()
     return [(STREAM, messages)]

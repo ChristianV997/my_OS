@@ -4,8 +4,6 @@ from backend.core.state import SystemState
 from backend.execution.loop import execute
 from core.celery_app import celery_app
 
-_state = SystemState()
-
 
 @celery_app.task
 def run_real_cycle(product):
@@ -24,7 +22,8 @@ def run_real_cycle(product):
     }
 
     decisions = [{"action": action, "pred": 1.0, "strategy": "bridge", "campaign_id": campaign_id}]
-    result = execute(decisions, _state)[0]
+    state = SystemState()
+    result = execute(decisions, state)[0]
     result["product_name"] = name
     result["timestamp"] = time.time()
     return result

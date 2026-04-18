@@ -3,12 +3,12 @@ from fastapi import APIRouter
 from backend.core.state import SystemState
 
 router = APIRouter()
-_state = SystemState()
 
 
 @router.get("/product/{product_id}")
 def product_lifecycle(product_id: str):
-    events = [row for row in _state.event_log.rows if row.get("product_id") == product_id]
+    state = SystemState()
+    events = [row for row in state.event_log.rows if row.get("product_id") == product_id]
 
     return [
         {
