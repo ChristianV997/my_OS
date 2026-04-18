@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-import os
 import json
 from pathlib import Path
 
@@ -12,7 +11,7 @@ st.title("📊 Intelligence System Health Dashboard")
 
 
 def load_data():
-    if not os.path.exists(LOG_PATH):
+    if not LOG_PATH.exists():
         return pd.DataFrame()
 
     data = []
@@ -52,5 +51,5 @@ else:
     st.subheader("Latest Metrics")
     st.dataframe(df.tail(5))
 
-if st.sidebar.checkbox("Auto-refresh every 3 seconds", value=True):
-    st.markdown("<meta http-equiv='refresh' content='3'>", unsafe_allow_html=True)
+if st.sidebar.button("Refresh now"):
+    st.rerun()
