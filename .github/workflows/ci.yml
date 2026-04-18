@@ -54,7 +54,7 @@ jobs:
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
           pip install numpy pytest
-      - name: Intelligence + Regime Regression + Meta Tracking
+      - name: Intelligence + Regime Regression + Meta + Hyperparam
         run: |
           python - << 'PY'
           import numpy as np
@@ -70,7 +70,8 @@ jobs:
               update_baseline,
               detect_regime
           )
-          from backend.ci.meta_performance import load_meta, save_meta, step
+          from backend.ci.meta_performance import load_meta, save_meta, step as meta_step
+          from backend.ci.hyperparam_meta import load_hp_meta, save_hp_meta, step as hp_step
           from backend.agents.evolution import evolution_engine
 
           class DummyEnv:
@@ -101,7 +102,6 @@ jobs:
           baseline = load_baseline()
 
           failures = compare_metrics(current, baseline, regime)
-
           if failures:
               print('REGRESSION FAIL:', failures)
               raise AssertionError(failures)
@@ -111,8 +111,16 @@ jobs:
 
           # meta-performance tracking
           meta = load_meta()
-          meta, status = step(meta, regime, current, evolution_engine=evolution_engine)
+          meta, status = meta_step(meta, regime, current, evolution_engine=evolution_engine)
           save_meta(meta)
 
-          print(f'STRICT_OK | regime={regime} | metrics={current} | status={status}')
+          # hyperparam optimization loop
+          prev = meta.get('regimes', {}).get(regime, {}).get('ema', {}).get('avg_roas', current['avg_roas'])
+          improvement = current['avg_roas'] - prev
+
+          hp_meta = load_hp_meta()
+          hp_meta = hp_step(hp_meta, regime, improvement, evolution_engine)
+          save_hp_meta(hp_meta)
+
+          print(f'STRICT_OK | regime={regime} | metrics={current} | improvement={improvement}')
           PY
