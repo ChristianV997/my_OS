@@ -1,4 +1,5 @@
 import json
+import os
 import threading
 
 try:  # pragma: no cover
@@ -8,6 +9,8 @@ except Exception:  # pragma: no cover
 
 
 STREAM = "upos_events"
+STREAM_READ_COUNT = int(os.getenv("UPOS_STREAM_READ_COUNT", "10"))
+STREAM_READ_BLOCK_MS = int(os.getenv("UPOS_STREAM_READ_BLOCK_MS", "1000"))
 
 _r = None
 _queue = []
@@ -40,7 +43,13 @@ def consume(group="workers", consumer="c1"):
             _r.xgroup_create(STREAM, group, id="0", mkstream=True)
         except Exception:
             pass
-        return _r.xreadgroup(group, consumer, {STREAM: ">"}, count=10, block=1000)
+        return _r.xreadgroup(
+            group,
+            consumer,
+            {STREAM: ">"},
+            count=STREAM_READ_COUNT,
+            block=STREAM_READ_BLOCK_MS,
+        )
 
     with _QUEUE_LOCK:
         if not _queue:

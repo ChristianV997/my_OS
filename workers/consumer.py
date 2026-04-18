@@ -1,9 +1,12 @@
 import json
+import logging
 import signal
 import time
 
 from core.storage import store_event
 from core.stream import consume
+
+logger = logging.getLogger(__name__)
 
 
 def run_once():
@@ -15,6 +18,7 @@ def run_once():
             try:
                 parsed = json.loads(payload["data"])
             except (TypeError, json.JSONDecodeError):
+                logger.warning("Skipping malformed event payload: %r", payload)
                 continue
 
             store_event(parsed)

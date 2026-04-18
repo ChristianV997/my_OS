@@ -27,6 +27,7 @@ from monitoring.realtime_alerts import process_event
 store = DelayedRewardStore()
 ENV = {"trend": 0.0, "regime": "stable"}
 SCALE_DOWN_FACTOR = 0.7
+# lightweight conversion assumptions until real click/impression ingestion is wired
 CLICKS_PER_DOLLAR = 2
 EXPECTED_CTR = 0.02
 

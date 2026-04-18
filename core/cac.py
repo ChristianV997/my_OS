@@ -1,5 +1,6 @@
 def estimate_cac(events):
-    spends = []
+    total_spend = 0.0
+    total_conversions = 0.0
 
     for event in events or []:
         conversions = getattr(event, "conversions", None)
@@ -9,10 +10,12 @@ def estimate_cac(events):
             conversions = event.get("conversions", conversions)
             spend = event.get("spend", spend)
 
-        if (conversions or 0) > 0:
-            spends.append(float(spend or 0))
+        conversions = float(conversions or 0)
+        if conversions > 0:
+            total_spend += float(spend or 0)
+            total_conversions += conversions
 
-    if not spends:
+    if total_conversions <= 0:
         return 0.0
 
-    return sum(spends) / len(spends)
+    return total_spend / total_conversions

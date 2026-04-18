@@ -2,6 +2,8 @@ import random
 
 
 class CompetitionAnalyzer:
+    """Placeholder analyzer until live competition connectors are enabled."""
+
     def analyze(self, _keyword):
         return {
             "competitors": random.randint(5, 50),
