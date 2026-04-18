@@ -1,3 +1,5 @@
+import json
+
 import numpy as np
 
 class BanditMemory:
@@ -6,6 +8,8 @@ class BanditMemory:
         self.history = {}  # action_key -> list of rewards
 
     def _key(self, action):
+        if isinstance(action, dict):
+            return json.dumps(action, sort_keys=True, default=str)
         return str(action)
 
     def update(self, action, reward):
