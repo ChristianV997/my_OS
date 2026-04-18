@@ -1,5 +1,6 @@
 import json
 import os
+from collections import deque
 
 import numpy as np
 
@@ -11,7 +12,9 @@ except Exception:
     LearningPolicy = None
     MABWISER_AVAILABLE = False
 
+
 class BanditMemory:
+    MAX_HISTORY_PER_KEY = 200
 
     def __init__(self):
         self.history = {}  # action_key -> list of rewards
@@ -23,7 +26,10 @@ class BanditMemory:
         k = self._key(action)
         if k not in self.history:
             self.history[k] = []
-        self.history[k].append(reward)
+        vals = self.history[k]
+        vals.append(reward)
+        if len(vals) > self.MAX_HISTORY_PER_KEY:
+            self.history[k] = vals[-self.MAX_HISTORY_PER_KEY:]
 
     def stats(self, action):
         k = self._key(action)
@@ -41,6 +47,7 @@ bandit_memory = BanditMemory()
 
 class ContextualBanditModel:
     HISTORY_LIMIT = 500
+    REFIT_INTERVAL = 5
     DEFAULT_SEED = int(os.getenv("MABWISER_SEED", "7"))
 
     CONTEXT_KEYS = [
@@ -60,12 +67,16 @@ class ContextualBanditModel:
         self.model = None
         self.is_fitted = False
         self.actions_by_arm = {}
-        self.decisions = []
-        self.rewards = []
-        self.contexts = []
+        self.decisions = deque(maxlen=self.HISTORY_LIMIT)
+        self.rewards = deque(maxlen=self.HISTORY_LIMIT)
+        self.contexts = deque(maxlen=self.HISTORY_LIMIT)
+        self._obs_since_fit = 0
 
     def _arm(self, action):
-        return json.dumps(action, sort_keys=True)
+        try:
+            return json.dumps(action, sort_keys=True)
+        except (TypeError, ValueError):
+            return str(action)
 
     def _vectorize(self, context):
         context = context or {}
@@ -87,11 +98,15 @@ class ContextualBanditModel:
         if len(arms) < 2:
             return
 
+        decisions_list = list(self.decisions)
+        rewards_list = list(self.rewards)
+        contexts_list = list(self.contexts)
+
         self.model = MAB(arms=arms, learning_policy=self._learning_policy(), seed=self.DEFAULT_SEED)
         try:
-            self.model.fit(self.decisions, self.rewards, contexts=self.contexts)
+            self.model.fit(decisions_list, rewards_list, contexts=contexts_list)
         except TypeError:
-            self.model.fit(self.decisions, self.rewards)
+            self.model.fit(decisions_list, rewards_list)
         except Exception:
             self.model = None
             self.is_fitted = False
@@ -105,10 +120,11 @@ class ContextualBanditModel:
         self.decisions.append(arm)
         self.rewards.append(float(reward))
         self.contexts.append(self._vectorize(context))
-        self.decisions = self.decisions[-self.HISTORY_LIMIT:]
-        self.rewards = self.rewards[-self.HISTORY_LIMIT:]
-        self.contexts = self.contexts[-self.HISTORY_LIMIT:]
-        self._fit()
+        self._obs_since_fit += 1
+        # Throttle expensive re-fitting to every REFIT_INTERVAL observations.
+        if self._obs_since_fit >= self.REFIT_INTERVAL:
+            self._obs_since_fit = 0
+            self._fit()
 
     def recommend(self, candidate_actions, context=None):
         if not (MABWISER_AVAILABLE and self.is_fitted and self.model):
@@ -135,6 +151,12 @@ class ContextualBanditModel:
 contextual_bandit = ContextualBanditModel()
 
 
+def _record_bandit_observation(action, roas, context):
+    """Shared helper for recording an observation in both bandit memory and contextual model."""
+    bandit_memory.update(action, roas)
+    contextual_bandit.observe(action, roas, context)
+
+
 def update_from_delayed(delayed_items):
 
     for item in delayed_items:
@@ -148,8 +170,7 @@ def update_from_delayed(delayed_items):
         outcome = item["outcome"]
         roas = outcome.get("roas", 0)
 
-        bandit_memory.update(action, roas)
-        contextual_bandit.observe(action, roas, context)
+        _record_bandit_observation(action, roas, context)
 
 
 def update_from_results(decisions, outcomes):
@@ -157,13 +178,11 @@ def update_from_results(decisions, outcomes):
         action = decision.get("action", {})
         context = decision.get("context_features", {})
         roas = outcome.get("roas", 0)
-        bandit_memory.update(action, roas)
-        contextual_bandit.observe(action, roas, context)
+        _record_bandit_observation(action, roas, context)
 
 
 def recommend_action(candidate_actions, context):
     return contextual_bandit.recommend(candidate_actions, context)
-
 
 
 def bandit_weight(action, graph, context=None):

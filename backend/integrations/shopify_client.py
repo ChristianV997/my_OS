@@ -14,6 +14,10 @@ MOCK_DRIFT_CYCLE = 7
 MOCK_DRIFT_MULTIPLIER = 3
 
 
+def _utcnow():
+    return datetime.datetime.now(datetime.UTC)
+
+
 def init_shopify():
     if shopify is None:
         raise RuntimeError("ShopifyAPI is not installed")
@@ -28,7 +32,7 @@ def init_shopify():
 def get_orders(last_n_minutes=60):
     global _mock_call_counter
     if shopify is None or not SHOP_URL or not ACCESS_TOKEN:
-        now = datetime.datetime.utcnow()
+        now = _utcnow()
         _mock_call_counter += 1
         drift = (_mock_call_counter % MOCK_DRIFT_CYCLE) * MOCK_DRIFT_MULTIPLIER
         return [
@@ -42,7 +46,7 @@ def get_orders(last_n_minutes=60):
 
     init_shopify()
 
-    now = datetime.datetime.utcnow()
+    now = _utcnow()
     since = now - datetime.timedelta(minutes=last_n_minutes)
 
     orders = shopify.Order.find(

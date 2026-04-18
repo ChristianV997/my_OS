@@ -41,9 +41,8 @@ def _safe_graph(state):
     return graph if graph is not None else type("GraphStub", (), {"edges": {}})()
 
 
-def _context_features(state, action=None):
-    action = action or {}
-    rows = _safe_rows(state)
+def _base_context(state, rows):
+    """Compute state-level context features once per decide() call."""
     history = [float(r.get("roas", 0)) for r in rows[-10:]]
     vel = roas_velocity(history)
     acc = roas_acceleration(history)
@@ -59,9 +58,15 @@ def _context_features(state, action=None):
         "roas_acceleration": float(acc),
         "causal_roas_effect": float(best_effect),
         "cycle": float(getattr(state, "total_cycles", getattr(state, "step", 0))),
-        "variant": float(action.get("variant", 0)),
-        "intensity": float(action.get("intensity", 0)),
-    }
+    }, vel, acc
+
+
+def _action_context(base, action):
+    """Extend cached base context with per-action features."""
+    ctx = base.copy()
+    ctx["variant"] = float(action.get("variant", 0))
+    ctx["intensity"] = float(action.get("intensity", 0))
+    return ctx
 
 
 def decide(state):
@@ -76,11 +81,10 @@ def decide(state):
     if hasattr(state, "event_log"):
         world_model.train(state.event_log)
 
-    history = [r.get("roas", 0) for r in rows[-10:]]
-    vel = roas_velocity(history)
-    acc = roas_acceleration(history)
+    # Compute velocity/acceleration once and reuse from cached base context.
+    base_ctx, vel, acc = _base_context(state, rows)
 
-    decisions=[]
+    decisions = []
 
     total_budget = 10
 
@@ -116,7 +120,7 @@ def decide(state):
             campaign_score = campaign_learning.score(campaign_id)
             budget_score = campaign_budget_allocator.get_budget(campaign_id)
 
-            context_features = _context_features(state, action)
+            context_features = _action_context(base_ctx, action)
             bandit_w = bandit_weight(action, graph, context_features)
 
             confidence = calibration_model.confidence_weight()
@@ -134,8 +138,8 @@ def decide(state):
             score += BUDGET_WEIGHT * budget_score
 
             decisions.append({
-                "action":action,
-                "score":score,
+                "action": action,
+                "score": score,
                 "pred": corrected_pred,
                 "strategy": name,
                 "campaign_id": campaign_id,
@@ -145,9 +149,12 @@ def decide(state):
             })
 
     # Optional MABWiser contextual ranking boost (falls back to score-only sorting).
+    recommend_ctx = base_ctx.copy()
+    recommend_ctx.setdefault("variant", 0.0)
+    recommend_ctx.setdefault("intensity", 0.0)
     selected = recommend_action(
         [d.get("action", {}) for d in decisions],
-        _context_features(state),
+        recommend_ctx,
     )
     if selected is not None:
         for decision in decisions:
@@ -155,6 +162,6 @@ def decide(state):
                 decision["score"] += 0.25
                 break
 
-    decisions.sort(key=lambda x:x["score"],reverse=True)
+    decisions.sort(key=lambda x: x["score"], reverse=True)
 
     return decisions

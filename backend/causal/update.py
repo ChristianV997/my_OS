@@ -13,14 +13,21 @@ CAUSAL_DOWHY_INTERVAL = 25
 
 
 def _numeric_keys(data):
+    if not data:
+        return []
     keys = []
     for k in data[0].keys():
-        try:
-            [float(row.get(k, 0)) for row in data]
+        if all(_is_numeric(row.get(k, 0)) for row in data):
             keys.append(k)
-        except (TypeError, ValueError):
-            pass
     return keys
+
+
+def _is_numeric(value):
+    try:
+        float(value)
+        return True
+    except (TypeError, ValueError):
+        return False
 
 
 def _correlation_fallback(graph, data, state=None):

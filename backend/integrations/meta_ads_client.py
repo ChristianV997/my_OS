@@ -6,7 +6,7 @@ AD_ACCOUNT_ID = os.getenv("META_AD_ACCOUNT_ID")
 
 
 def get_ad_spend(last_n_minutes=60):
-    now = datetime.datetime.utcnow()
+    now = datetime.datetime.now(datetime.UTC)
     since = now - datetime.timedelta(minutes=last_n_minutes)
 
     # MOCK multi-campaign breakdown (replace with real API later)
