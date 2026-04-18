@@ -4,3 +4,6 @@ fastapi
 uvicorn
 pytest
 httpx
+requests
+# Optional — only needed for live Shopify integration
+# ShopifyAPI

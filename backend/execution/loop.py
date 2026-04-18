@@ -9,7 +9,9 @@ from backend.learning.calibration_log import calibration_log
 from backend.causal.update import update_causal
 from backend.regime.detector import detector
 from backend.regime.confidence import regime_confidence
-
+from backend.agents.structural_evolution import structural_engine
+from backend.agents.self_healing import self_healing_engine
+from backend.simulation.reality_gap import reality_gap_engine
 
 store = DelayedRewardStore()
 
@@ -29,7 +31,7 @@ def _simulate_environment():
     elif ENV["regime"] == "volatile":
         ENV["trend"] += random.uniform(-0.1, 0.1)
     elif ENV["regime"] == "stable":
-        ENV["trend"] *= 0.95  # decay toward zero
+        ENV["trend"] *= 0.95
     ENV["trend"] = max(-1.0, min(1.0, ENV["trend"]))
 
 
@@ -41,31 +43,49 @@ def _generate_roas():
     return max(0.1, base + noise + delayed)
 
 
+def _population_diversity():
+    """Mean pairwise distance across structural population."""
+    from backend.agents.structural_evolution import structure_distance
+    pop = structural_engine.population
+    if len(pop) < 2:
+        return 1.0
+    dists = [structure_distance(pop[i], pop[j])
+             for i in range(len(pop)) for j in range(i + 1, len(pop))]
+    return sum(dists) / len(dists)
+
+
 def execute(decisions, state):
     results = []
     for d in decisions:
         action = d.get("action", {})
+        structure = d.get("structure")
         roas = _generate_roas()
         cost = COST_PER_DECISION
         revenue = roas * cost
 
-        # calibration feedback
         pred = d.get("pred", 1.0)
         calibration_model.update(pred, roas)
 
         outcome = {
-            "roas":     round(roas, 4),
-            "roas_6h":  round(max(0.01, roas * random.uniform(0.70, 0.95)), 4),
-            "roas_12h": round(max(0.01, roas * random.uniform(0.85, 1.05)), 4),
-            "roas_24h": round(max(0.01, roas * random.uniform(0.90, 1.10)), 4),
-            "revenue":  round(revenue, 2),
-            "cost":     cost,
+            "roas":       round(roas, 4),
+            "roas_6h":    round(max(0.01, roas * random.uniform(0.70, 0.95)), 4),
+            "roas_12h":   round(max(0.01, roas * random.uniform(0.85, 1.05)), 4),
+            "roas_24h":   round(max(0.01, roas * random.uniform(0.90, 1.10)), 4),
+            "revenue":    round(revenue, 2),
+            "cost":       cost,
             "prediction": round(pred, 4),
-            "error":    round(pred - roas, 4),
+            "error":      round(pred - roas, 4),
             "env_regime": ENV["regime"],
             "env_trend":  round(ENV["trend"], 4),
         }
         outcome.update(action)
+
+        # structural evolution scoring
+        if structure:
+            structural_engine.score(structure, roas)
+
+        # track reality gap (real_roas=None until external data arrives)
+        reality_gap_engine.update(roas, None)
 
         store.log(action, outcome)
         state.capital += revenue - cost
@@ -81,6 +101,10 @@ def process_delayed():
 
 
 def run_cycle(state):
+    # initialize structural population on first cycle
+    if not structural_engine.population:
+        structural_engine.initialize(n=5)
+
     decisions = decide(state)
     results = execute(decisions, state)
     state.event_log.log_batch(results)
@@ -88,14 +112,18 @@ def run_cycle(state):
     state = learn(state, results)
     state.graph = update_causal(state.graph, state.event_log)
 
-    # update regime detection and track confidence
-    prev_regime = state.detected_regime
     state.detected_regime = detector.detect(state.event_log)
     regime_confidence.update(state.detected_regime, ENV["regime"])
-
-    # log calibration stats
     calibration_log.log(calibration_model.stats())
 
     process_delayed()
+
+    # structural evolution every 10 cycles
+    if state.total_cycles % 10 == 0 and state.total_cycles > 0:
+        structural_engine.evolve()
+        avg_roas = (sum(r.get("roas", 0) for r in results) / max(len(results), 1))
+        diversity = _population_diversity()
+        self_healing_engine.heal(avg_roas, diversity, structural_engine)
+
     state.total_cycles += 1
     return state
