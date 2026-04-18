@@ -12,3 +12,4 @@ class SystemState:
         self.regime = "neutral"
         self.capital = 1000.0
         self.memory = []
+        self.total_cycles = 0

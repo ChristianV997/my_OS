@@ -1,0 +1,94 @@
+name: Benchmark
+
+on:
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      cycles:
+        description: 'Cycles per branch'
+        required: false
+        default: '100'
+        type: string
+
+jobs:
+  # Run the benchmark on the PR branch
+  bench-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Benchmark (PR branch)
+        run: |
+          python scripts/benchmark.py \
+            --cycles ${{ github.event.inputs.cycles || '100' }} \
+            --output bench-pr.json
+
+      - name: Upload metrics
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-pr
+          path: bench-pr.json
+          retention-days: 7
+
+  # Run the same benchmark on main for a fair comparison
+  bench-main:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Benchmark (main branch)
+        run: |
+          python scripts/benchmark.py \
+            --cycles ${{ github.event.inputs.cycles || '100' }} \
+            --output bench-main.json
+
+      - name: Upload metrics
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-main
+          path: bench-main.json
+          retention-days: 7
+
+  # Compare and report — fails the workflow on regression
+  compare:
+    needs: [ bench-pr, bench-main ]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: bench-main
+          path: .
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: bench-pr
+          path: .
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Compare benchmarks
+        run: |
+          python scripts/compare_benchmarks.py bench-main.json bench-pr.json \
+            | tee comparison.md
+          cat comparison.md >> $GITHUB_STEP_SUMMARY
