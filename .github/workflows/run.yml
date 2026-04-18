@@ -53,7 +53,7 @@ jobs:
         run: |
           python scripts/run_cycles.py \
             --cycles ${{ github.event.inputs.cycles || '200' }} \
-            --state-path state/state.json
+            --state-path state/state.db
 
       # Always save, even on failure, so state is never lost
       - name: Save state

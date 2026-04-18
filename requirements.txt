@@ -5,5 +5,6 @@ uvicorn
 pytest
 httpx
 requests
+duckdb
 # Optional — only needed for live Shopify integration
 # ShopifyAPI

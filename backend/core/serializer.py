@@ -1,3 +1,8 @@
+"""
+State persistence router.
+  .db  extension  → DuckDB (default, recommended)
+  .json extension → legacy JSON (still supported for migration)
+"""
 import json
 import os
 
@@ -8,10 +13,16 @@ import backend.regime.confidence as rc
 from backend.execution.loop import ENV
 from backend.core.state import SystemState
 
-STATE_PATH = "state/state.json"
+STATE_PATH = "state/state.db"
 
 
 def save(state, path=STATE_PATH):
+    if path.endswith(".db"):
+        from backend.core.db_serializer import save as db_save
+        db_save(state, path)
+        return
+
+    # --- legacy JSON ---
     os.makedirs(os.path.dirname(path), exist_ok=True)
     payload = {
         "capital": state.capital,
@@ -34,6 +45,11 @@ def save(state, path=STATE_PATH):
 
 
 def load(path=STATE_PATH):
+    if path.endswith(".db"):
+        from backend.core.db_serializer import load as db_load
+        return db_load(path)
+
+    # --- legacy JSON ---
     if not os.path.exists(path):
         return None
     with open(path) as f:
