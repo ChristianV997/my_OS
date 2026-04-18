@@ -11,7 +11,6 @@ from backend.causal.update import update_causal
 from backend.regime.detector import detector
 from backend.regime.confidence import regime_confidence
 
-# NEW integrations
 from backend.integrations.shopify_client import get_orders, compute_metrics
 from backend.integrations.meta_ads_client import get_ad_spend
 
@@ -21,29 +20,41 @@ store = DelayedRewardStore()
 def execute(decisions, state):
     results = []
 
-    # --- REAL DATA ---
     orders = get_orders(last_n_minutes=60)
     metrics = compute_metrics(orders)
     ads = get_ad_spend(last_n_minutes=60)
 
     revenue = metrics["revenue"]
     order_count = metrics["orders"]
-    spend = ads["spend"]
+    campaigns = ads["campaigns"]
+
+    total_spend = ads["total_spend"]
+
+    # proportional attribution
+    total_revenue = revenue
 
     for d in decisions:
         action = d.get("action", {})
+        campaign_id = action.get("campaign_id") or campaigns[0]["campaign_id"]
 
-        roas = revenue / max(spend, 1)
+        campaign = next((c for c in campaigns if c["campaign_id"] == campaign_id), campaigns[0])
+
+        campaign_spend = campaign["spend"]
+
+        # proportional revenue attribution
+        campaign_revenue = (campaign_spend / max(total_spend, 1)) * total_revenue
+
+        roas = campaign_revenue / max(campaign_spend, 1)
 
         pred = d.get("pred", 1.0)
         calibration_model.update(pred, roas)
 
         outcome = {
             "roas": round(roas, 4),
-            "revenue": round(revenue, 2),
+            "revenue": round(campaign_revenue, 2),
             "orders": order_count,
-            "cost": spend,
-            "campaign_id": ads.get("campaign_id"),
+            "cost": campaign_spend,
+            "campaign_id": campaign_id,
             "window_start": ads.get("since"),
             "window_end": ads.get("until"),
             "prediction": round(pred, 4),
@@ -54,7 +65,7 @@ def execute(decisions, state):
         outcome.update(action)
 
         store.log(action, outcome)
-        state.capital += revenue - spend
+        state.capital += campaign_revenue - campaign_spend
 
         results.append(outcome)
 
@@ -76,8 +87,6 @@ def run_cycle(state):
     state = learn(state, results)
     state.graph = update_causal(state.graph, state.event_log)
 
-    # regime detection from real signal
-    prev_regime = state.detected_regime
     state.detected_regime = detector.detect(state.event_log)
     regime_confidence.update(state.detected_regime, "real_market")
 
