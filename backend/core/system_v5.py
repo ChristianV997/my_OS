@@ -39,12 +39,17 @@ def _normalize_for_json(value):
             normalized[normalized_key] = _normalize_for_json(item)
         return normalized
     if isinstance(value, set):
-        return [_normalize_for_json(item) for item in sorted(value, key=str)]
+        try:
+            items = sorted(value, key=str)
+        except TypeError:
+            items = list(value)
+        return [_normalize_for_json(item) for item in items]
     if isinstance(value, (list, tuple)):
         return [_normalize_for_json(item) for item in value]
     if hasattr(value, "item"):
         try:
             item_value = value.item()
+            # Guard against scalar-like objects whose .item() returns self.
             if item_value is value:
                 return str(value)
             return _normalize_for_json(item_value)
