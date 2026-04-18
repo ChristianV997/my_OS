@@ -11,21 +11,33 @@ on:
         default: '100'
         type: string
 
+permissions:
+  contents: read
+
+concurrency:
+  group: benchmark-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   # Benchmark on the PR branch — has scripts/ available
   bench-pr:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     env:
       PYTHONPATH: ${{ github.workspace }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: requirements.txt
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
 
       - name: Benchmark (PR branch)
         run: |
@@ -42,19 +54,24 @@ jobs:
   # Benchmark on main — self-contained, no scripts/ dependency
   bench-main:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     env:
       PYTHONPATH: ${{ github.workspace }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           ref: main
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: requirements.txt
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
 
       - name: Benchmark (main branch)
         env:
@@ -119,10 +136,11 @@ jobs:
   compare:
     needs: [ bench-pr, bench-main ]
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     env:
       PYTHONPATH: ${{ github.workspace }}
     steps:
-      - uses: actions/checkout@v4   # PR branch (has scripts/)
+      - uses: actions/checkout@v5   # PR branch (has scripts/)
 
       - uses: actions/download-artifact@v4
         with:
@@ -134,9 +152,11 @@ jobs:
           name: bench-pr
           path: .
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: requirements.txt
 
       - name: Compare and report
         run: |
