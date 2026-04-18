@@ -8,10 +8,22 @@ def update_causal(graph, event_log):
     if len(data) < 10:
         return graph
 
-    keys = list(data[0].keys())
+    all_keys = list(data[0].keys())
+
+    # keep only numeric-valued keys
+    keys = []
+    for k in all_keys:
+        try:
+            [float(row.get(k, 0)) for row in data]
+            keys.append(k)
+        except (TypeError, ValueError):
+            pass
+
+    if not keys:
+        return graph
 
     # build matrix
-    matrix = np.array([[row.get(k, 0) for k in keys] for row in data], dtype=float)
+    matrix = np.array([[float(row.get(k, 0)) for k in keys] for row in data])
 
     # compute correlations with roas
     if "roas" not in keys:

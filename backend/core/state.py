@@ -11,4 +11,6 @@ class SystemState:
         self.population = []
         self.regime = "neutral"
         self.detected_regime = "unknown"
-        self.capital = 1000
+        self.capital = 1000.0
+        self.memory = []
+        self.total_cycles = 0

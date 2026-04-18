@@ -1,39 +1,46 @@
 import numpy as np
+from sklearn.linear_model import Ridge
+
 
 class WorldModel:
 
+    HORIZONS = ["6h", "12h", "24h"]
+
     def __init__(self):
-        self.w6=None; self.w12=None; self.w24=None
+        self._models = {}
+        self._fitted = set()
 
-    def featurize(self, action):
-        return np.array([float(v) for v in action.values()])
-
-    def _fit(self,X,y):
-        try: return np.linalg.lstsq(X,y,rcond=None)[0]
-        except: return None
+    def _featurize(self, action):
+        return np.array([float(v) for v in action.values()], dtype=float)
 
     def train(self, event_log):
-        rows=event_log.rows
-        if len(rows)<20: return
-        X=[]; y6=[]; y12=[]; y24=[]
-        for r in rows:
-            a={"variant": r.get("variant",0)}
-            X.append(self.featurize(a))
-            y6.append(r.get("roas_6h", r.get("roas",0)))
-            y12.append(r.get("roas_12h", r.get("roas",0)))
-            y24.append(r.get("roas_24h", r.get("roas",0)))
-        X=np.array(X)
-        self.w6=self._fit(X,np.array(y6))
-        self.w12=self._fit(X,np.array(y12))
-        self.w24=self._fit(X,np.array(y24))
+        rows = event_log.rows
+        if len(rows) < 20:
+            return
 
-    def _pred(self,w,x):
-        if w is None: return 1.0
-        try: return float(np.dot(x,w))
-        except: return 1.0
+        features, targets = [], {h: [] for h in self.HORIZONS}
+        for r in rows:
+            action = {"variant": r.get("variant", 0)}
+            features.append(self._featurize(action))
+            base = r.get("roas", 0)
+            targets["6h"].append(r.get("roas_6h", base))
+            targets["12h"].append(r.get("roas_12h", base))
+            targets["24h"].append(r.get("roas_24h", base))
+
+        X = np.array(features)
+        for h, y in targets.items():
+            m = Ridge(alpha=1.0)
+            m.fit(X, np.array(y))
+            self._models[h] = m
+            self._fitted.add(h)
 
     def predict(self, action):
-        x=self.featurize(action)
-        return {"roas_6h":self._pred(self.w6,x),"roas_12h":self._pred(self.w12,x),"roas_24h":self._pred(self.w24,x)}
+        x = self._featurize(action).reshape(1, -1)
+        return {
+            f"roas_{h}": float(self._models[h].predict(x)[0])
+            if h in self._fitted else 1.0
+            for h in self.HORIZONS
+        }
 
-world_model=WorldModel()
+
+world_model = WorldModel()

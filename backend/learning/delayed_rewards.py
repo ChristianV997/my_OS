@@ -14,8 +14,6 @@ class DelayedRewardStore:
 
     def get_ready(self, delay):
         now = time.time()
-        ready = []
-        for item in self.buffer:
-            if now - item["t"] >= delay:
-                ready.append(item)
+        ready = [item for item in self.buffer if now - item["t"] >= delay]
+        self.buffer = [item for item in self.buffer if now - item["t"] < delay]
         return ready

@@ -1,0 +1,56 @@
+name: System Run
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'   # every 6 hours
+  workflow_dispatch:
+    inputs:
+      cycles:
+        description: 'Number of cycles to run'
+        required: false
+        default: '200'
+        type: string
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # Restore the previous persisted state so the model keeps learning
+      - name: Restore state
+        id: cache-restore
+        uses: actions/cache/restore@v4
+        with:
+          path: state/
+          key: marketos-state-${{ github.run_id }}
+          restore-keys: |
+            marketos-state-
+
+      - name: Run cycles
+        run: |
+          python scripts/run_cycles.py \
+            --cycles ${{ github.event.inputs.cycles || '200' }} \
+            --state-path state/state.json
+
+      # Always save, even on failure, so state is never lost
+      - name: Save state
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: state/
+          key: marketos-state-${{ github.run_id }}
+
+      - name: Generate job summary
+        if: always()
+        run: python scripts/report.py >> $GITHUB_STEP_SUMMARY
