@@ -29,7 +29,7 @@ def execute(decisions, state):
 
     revenue = metrics["revenue"]
     order_count = metrics["orders"]
-    campaigns = ads.get("campaigns") or [{"campaign_id": "unknown", "spend": 0.0}]
+    campaigns = ads.get("campaigns") or [{"campaign_id": "fallback_campaign", "spend": 0.0}]
 
     total_spend = ads["total_spend"]
     total_revenue = revenue

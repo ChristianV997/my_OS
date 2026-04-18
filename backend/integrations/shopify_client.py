@@ -3,7 +3,7 @@ import datetime
 
 try:
     import shopify
-except ImportError:  # pragma: no cover - exercised in CI when package is absent
+except ImportError:  # pragma: no cover
     shopify = None
 
 SHOP_URL = os.getenv("SHOPIFY_SHOP_URL")
@@ -39,6 +39,8 @@ def get_orders(last_n_minutes=60):
             status="any",
             created_at_min=since.isoformat()
         )
+    except (KeyboardInterrupt, SystemExit):
+        raise
     except Exception:
         return _mock_orders(since, now)
 

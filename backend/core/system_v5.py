@@ -75,10 +75,14 @@ class SystemV5:
 
         for d in decisions[:5]:
             outcome = env.execute(d["action"])
-            outcome = dict(outcome)
             outcome["prediction"] = d.get("pred", 1.0)
             outcome["strategy"] = d.get("strategy")
-            outcome["campaign_id"] = d.get("campaign_id") or d["action"].get("campaign_id") or "default_campaign"
+            campaign_id = d.get("campaign_id")
+            if not campaign_id:
+                campaign_id = d["action"].get("campaign_id")
+            if not campaign_id:
+                campaign_id = "default_campaign"
+            outcome["campaign_id"] = campaign_id
 
             allocator.update(d["strategy"], outcome.get("roas", 0))
             evolution_engine.update(d["strategy"], outcome.get("roas", 0))
@@ -91,7 +95,10 @@ class SystemV5:
 
         # long-term evolution
         if self.state.step % 10 == 0:
-            self.state.strategies = evolution_engine.evolve(self.state.strategies)
+            evolved = evolution_engine.evolve(self.state.strategies)
+            if evolved is not self.state.strategies:
+                self.state.strategies.clear()
+                self.state.strategies.update(evolved)
 
         self.state.save()
 
