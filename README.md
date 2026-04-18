@@ -14,6 +14,7 @@ python backend/main.py
 - Learning (velocity, acceleration, advantage)
 - Causal Graph (correlation-based)
 - Delayed Rewards (time-aware updates)
+- Production Integration Layer (Meta/Shopify ingestion, profit loop, control API, alerts)
 
 ## Status
-Core loop integrated. Next: multi-horizon prediction.
+Core loop integrated with execution bridge + control surface.

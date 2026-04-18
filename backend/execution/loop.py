@@ -18,6 +18,11 @@ from backend.agents.self_healing_guard import guarded_self_healing
 from backend.integrations.shopify_client import get_orders, compute_metrics
 from backend.integrations.meta_ads_client import get_ad_spend
 from backend.agents.structural_evolution import structural_engine
+from backend.agents.campaign_budget import campaign_budget_allocator
+from backend.monitoring.alerting import send_slack, send_telegram
+from agents.auto_kill import should_kill
+from core.cac import estimate_cac
+from monitoring.realtime_alerts import process_event
 
 store = DelayedRewardStore()
 ENV = {"trend": 0.0, "regime": "stable"}
@@ -51,6 +56,13 @@ def execute(decisions, state):
         campaign_revenue = (campaign_spend / max(total_spend, 1)) * total_revenue
 
         roas = campaign_revenue / max(campaign_spend, 1)
+        clicks = max(1, int(campaign_spend * 2))
+        impressions = max(clicks, int(clicks / 0.02))
+        conversions = max(1, int(order_count * (campaign_spend / max(total_spend, 1))))
+        ctr = clicks / max(impressions, 1)
+        cvr = conversions / max(clicks, 1)
+        cac = estimate_cac([{"spend": campaign_spend, "conversions": conversions}])
+        profit = campaign_revenue - campaign_spend
 
         pred = d.get("pred", 1.0)
         calibration_model.update(pred, roas)
@@ -64,6 +76,11 @@ def execute(decisions, state):
             "revenue": round(campaign_revenue, 2),
             "orders": order_count,
             "cost": campaign_spend,
+            "spend": campaign_spend,
+            "profit": round(profit, 2),
+            "ctr": round(ctr, 4),
+            "cvr": round(cvr, 4),
+            "cac": round(cac, 4),
             "campaign_id": campaign_id,
             "window_start": ads.get("since"),
             "window_end": ads.get("until"),
@@ -77,6 +94,7 @@ def execute(decisions, state):
 
         outcome.update(action)
         campaign_learning.update(action, outcome)
+        campaign_budget_allocator.update(campaign_id, roas)
 
         # 🔥 structural learning
         if structure:
@@ -86,6 +104,17 @@ def execute(decisions, state):
         state.capital += campaign_revenue - campaign_spend
 
         results.append(outcome)
+
+        if roas > 1.2:
+            send_telegram(f"🏆 winner {campaign_id} roas={round(roas, 3)}")
+            send_slack(f"🏆 winner {campaign_id} roas={round(roas, 3)}")
+
+        if should_kill(outcome):
+            outcome["killed"] = True
+            send_telegram(f"🔪 killed {campaign_id} roas={round(roas, 3)} ctr={round(ctr, 4)}")
+            send_slack(f"🔪 killed {campaign_id} roas={round(roas, 3)} ctr={round(ctr, 4)}")
+
+        process_event(outcome)
 
     return results
 
