@@ -1,4 +1,5 @@
 import time
+import uuid
 
 from backend.core.state import SystemState
 from backend.execution.loop import execute
@@ -9,7 +10,8 @@ from core.celery_app import celery_app
 def run_real_cycle(product):
     product = product or {}
     name = str(product.get("name", "product")).strip() or "product"
-    campaign_id = f"camp_{name.lower().replace(' ', '_')[:20]}"
+    suffix = uuid.uuid4().hex[:6]
+    campaign_id = f"camp_{name.lower().replace(' ', '_')[:20]}_{suffix}"
 
     action = {
         "campaign_id": campaign_id,

@@ -5,7 +5,10 @@ class ShopifyScraper:
     def fetch_products(self, store_url):
         url = f"{store_url.rstrip('/')}/products.json"
         response = requests.get(url, timeout=10)
-        response.raise_for_status()
+        try:
+            response.raise_for_status()
+        except requests.HTTPError as exc:
+            raise requests.HTTPError(f"Failed to fetch products from {store_url}: {exc}") from exc
         payload = response.json()
 
         products = []

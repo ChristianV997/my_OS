@@ -7,6 +7,7 @@ _WRITE_LOCK = threading.Lock()
 
 
 def store_event(event):
+    """Append a JSON-serializable event dict to local JSONL storage."""
     os.makedirs(os.path.dirname(EVENTS_PATH), exist_ok=True)
 
     with _WRITE_LOCK:

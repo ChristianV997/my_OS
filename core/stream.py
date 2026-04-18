@@ -38,6 +38,12 @@ def publish(event):
 
 
 def consume(group="workers", consumer="c1"):
+    """
+    Return stream messages as [(stream_name, [(message_id, {"data": "<json>"})])].
+
+    Uses Redis consumer groups when Redis is available; otherwise drains
+    the in-memory fallback queue with the same return shape.
+    """
     if _r is not None:  # pragma: no cover
         try:
             _r.xgroup_create(STREAM, group, id="0", mkstream=True)

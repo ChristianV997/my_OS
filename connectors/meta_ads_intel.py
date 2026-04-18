@@ -15,7 +15,10 @@ class MetaAdsIntel:
         }
 
         response = requests.get(url, params=params, timeout=10)
-        response.raise_for_status()
+        try:
+            response.raise_for_status()
+        except requests.HTTPError as exc:
+            raise requests.HTTPError(f"Failed Meta Ads search for keyword '{keyword}': {exc}") from exc
         payload = response.json()
         return len(payload.get("data", []))
 
