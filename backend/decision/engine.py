@@ -3,11 +3,13 @@ from backend.learning.signals import roas_velocity, roas_acceleration
 from backend.learning.bandit_update import bandit_weight
 from backend.learning.calibration import calibration_model
 from backend.learning.campaign_learning import campaign_learning
+from backend.agents.campaign_budget import campaign_budget_allocator
 from backend.agents.strategies import strategies
 from backend.agents.allocator import allocator
 from agents.world_model import world_model
 
 CAMPAIGN_WEIGHT = 0.5
+BUDGET_WEIGHT = 0.3
 
 
 def decide(state):
@@ -44,6 +46,7 @@ def decide(state):
 
             campaign_id = action.get("campaign_id")
             campaign_score = campaign_learning.score(campaign_id)
+            budget_score = campaign_budget_allocator.get_budget(campaign_id)
 
             bandit_w=bandit_weight((name, campaign_id),state.graph)
 
@@ -51,6 +54,7 @@ def decide(state):
 
             score = (corrected_pred + c_score + velocity_bonus + bandit_w) * confidence
             score += CAMPAIGN_WEIGHT * campaign_score
+            score += BUDGET_WEIGHT * budget_score
 
             decisions.append({
                 "action":action,
