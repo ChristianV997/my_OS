@@ -7,40 +7,37 @@ on:
     branches: [ main ]
 
 jobs:
-  build-and-test:
+  test:
     runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: ${{ github.workspace }}
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      - name: Install deps
+      - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Lint (basic)
-        run: |
-          python - << 'PY'
-import compileall, sys
-ok = compileall.compile_dir('.', force=True, quiet=1)
-sys.exit(0 if ok else 1)
-PY
+      - name: Compile check
+        run: python -m compileall -q .
 
       - name: Run tests
-        run: pytest -v
+        run: pytest tests/ -v
 
-      - name: Smoke run (5 cycles)
+      - name: Smoke run (10 cycles)
         run: |
           python - << 'PY'
-from backend.core.state import SystemState
-from backend.execution.loop import run_cycle
-s=SystemState()
-for _ in range(5): s=run_cycle(s)
-print('OK')
-PY
+          from backend.core.state import SystemState
+          from backend.execution.loop import run_cycle
+          s = SystemState()
+          for _ in range(10):
+              s = run_cycle(s)
+          assert len(s.event_log.rows) > 0
+          assert s.total_cycles == 10
+          print(f"OK — {s.total_cycles} cycles, capital=${s.capital:.2f}, regime={s.detected_regime}")
+          PY

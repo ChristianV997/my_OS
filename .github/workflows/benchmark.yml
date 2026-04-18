@@ -12,9 +12,11 @@ on:
         type: string
 
 jobs:
-  # Run the benchmark on the PR branch
+  # Benchmark on the PR branch — has scripts/ available
   bench-pr:
     runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: ${{ github.workspace }}
     steps:
       - uses: actions/checkout@v4
 
@@ -31,16 +33,17 @@ jobs:
             --cycles ${{ github.event.inputs.cycles || '100' }} \
             --output bench-pr.json
 
-      - name: Upload metrics
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: bench-pr
           path: bench-pr.json
           retention-days: 7
 
-  # Run the same benchmark on main for a fair comparison
+  # Benchmark on main — self-contained, no scripts/ dependency
   bench-main:
     runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: ${{ github.workspace }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -54,24 +57,72 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Benchmark (main branch)
+        env:
+          BENCH_CYCLES: ${{ github.event.inputs.cycles || '100' }}
         run: |
-          python scripts/benchmark.py \
-            --cycles ${{ github.event.inputs.cycles || '100' }} \
-            --output bench-main.json
+          python - << 'PY'
+          import json, time, os, random
+          from backend.core.state import SystemState
+          from backend.execution.loop import run_cycle
 
-      - name: Upload metrics
-        uses: actions/upload-artifact@v4
+          cycles = int(os.environ.get("BENCH_CYCLES", 100))
+          state = SystemState()
+          roas_history = []
+
+          t0 = time.time()
+          for _ in range(cycles):
+              state = run_cycle(state)
+              if state.event_log.rows:
+                  roas_history.append(state.event_log.rows[-1].get("roas", 0))
+
+          elapsed = time.time() - t0
+          recent = state.event_log.rows[-50:]
+          avg_roas = sum(r.get("roas", 0) for r in recent) / max(len(recent), 1)
+
+          variants: dict = {}
+          for r in recent:
+              v = str(r.get("variant", "?"))
+              variants.setdefault(v, []).append(float(r.get("roas", 0)))
+          variant_avg = {v: sum(vals)/len(vals) for v, vals in variants.items()}
+
+          tail = roas_history[-20:]
+          if len(tail) >= 2:
+              n = len(tail)
+              xs = list(range(n)); xm = sum(xs)/n; ym = sum(tail)/n
+              slope = sum((xs[i]-xm)*(tail[i]-ym) for i in range(n)) / max(
+                  sum((xs[i]-xm)**2 for i in range(n)), 1e-9)
+          else:
+              slope = 0.0
+
+          metrics = {
+              "cycles": cycles, "elapsed_s": round(elapsed, 2),
+              "final_capital": round(state.capital, 4),
+              "capital_gain": round(state.capital - 1000.0, 4),
+              "avg_roas": round(avg_roas, 6),
+              "roas_trend_slope": round(slope, 6),
+              "causal_edges": len(state.graph.edges),
+              "memory_size": len(state.memory),
+              "variant_avg_roas": {k: round(v, 4) for k, v in variant_avg.items()},
+          }
+          with open("bench-main.json", "w") as f:
+              json.dump(metrics, f, indent=2)
+          print(json.dumps(metrics, indent=2))
+          PY
+
+      - uses: actions/upload-artifact@v4
         with:
           name: bench-main
           path: bench-main.json
           retention-days: 7
 
-  # Compare and report — fails the workflow on regression
+  # Compare results — fails on regression; uses PR branch scripts
   compare:
     needs: [ bench-pr, bench-main ]
     runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: ${{ github.workspace }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4   # PR branch (has scripts/)
 
       - uses: actions/download-artifact@v4
         with:
@@ -87,7 +138,7 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Compare benchmarks
+      - name: Compare and report
         run: |
           python scripts/compare_benchmarks.py bench-main.json bench-pr.json \
             | tee comparison.md
