@@ -3,6 +3,7 @@ import random
 from backend.decision.scoring import causal_score
 from backend.learning.signals import roas_velocity, roas_acceleration
 from backend.learning.bandit_update import bandit_weight
+from backend.learning.calibration import calibration_model
 from agents.world_model import world_model
 
 
@@ -28,13 +29,22 @@ def decide(state):
             0.2*preds["roas_24h"]
         )
 
+        # calibration correction
+        corrected_pred = calibration_model.adjust_prediction(weighted_pred)
+
         c_score=causal_score(action,state.graph)
         velocity_bonus=vel+acc
         bandit_w=bandit_weight(action,state.graph)
 
-        score = weighted_pred + c_score + velocity_bonus + bandit_w
+        confidence = calibration_model.confidence_weight()
 
-        decisions.append({"action":action,"score":score})
+        score = (corrected_pred + c_score + velocity_bonus + bandit_w) * confidence
+
+        decisions.append({
+            "action":action,
+            "score":score,
+            "pred": corrected_pred
+        })
 
     decisions.sort(key=lambda x:x["score"],reverse=True)
 
