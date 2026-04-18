@@ -14,3 +14,6 @@ class SystemState:
         self.capital = 1000.0
         self.memory = []
         self.total_cycles = 0
+        self.last_reality_gap = None
+        self.last_confidence = 1.0
+        self.last_heal_actions = []
