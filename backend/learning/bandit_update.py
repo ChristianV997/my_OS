@@ -76,7 +76,9 @@ class ContextualBanditModel:
         try:
             return json.dumps(action, sort_keys=True)
         except (TypeError, ValueError):
-            return str(action)
+            if isinstance(action, dict):
+                return repr(sorted(action.items()))
+            return repr(action)
 
     def _vectorize(self, context):
         context = context or {}
