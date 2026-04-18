@@ -1,4 +1,28 @@
+import json
+
 import numpy as np
+
+
+def _canonicalize_action(value):
+    if isinstance(value, dict):
+        normalized = {}
+        for key, item in value.items():
+            normalized[str(key)] = _canonicalize_action(item)
+        return normalized
+    if isinstance(value, (list, tuple)):
+        return [_canonicalize_action(item) for item in value]
+    if hasattr(value, "item"):
+        try:
+            item_value = value.item()
+            if item_value is value:
+                return str(value)
+            return _canonicalize_action(item_value)
+        except (TypeError, ValueError):
+            return str(value)
+    if isinstance(value, (str, int, float, bool, type(None))):
+        return value
+    return str(value)
+
 
 class BanditMemory:
 
@@ -6,6 +30,8 @@ class BanditMemory:
         self.history = {}  # action_key -> list of rewards
 
     def _key(self, action):
+        if isinstance(action, dict):
+            return json.dumps(_canonicalize_action(action), sort_keys=True)
         return str(action)
 
     def update(self, action, reward):

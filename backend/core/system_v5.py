@@ -10,6 +10,54 @@ from backend.learning.campaign_learning import campaign_learning
 STATE_PATH = "backend/state/system_state.json"
 
 
+def _json_default(obj):
+    if hasattr(obj, "item"):
+        try:
+            return obj.item()
+        except (TypeError, ValueError):
+            pass
+    if hasattr(obj, "__float__"):
+        try:
+            return float(obj)
+        except (TypeError, ValueError):
+            pass
+    if hasattr(obj, "__int__"):
+        try:
+            return int(obj)
+        except (TypeError, ValueError):
+            pass
+    return str(obj)
+
+
+def _normalize_for_json(value):
+    if isinstance(value, dict):
+        normalized = {}
+        for key, item in value.items():
+            normalized_key = _normalize_for_json(key)
+            if not isinstance(normalized_key, (str, int, float, bool, type(None))):
+                normalized_key = str(normalized_key)
+            normalized[normalized_key] = _normalize_for_json(item)
+        return normalized
+    if isinstance(value, set):
+        try:
+            items = sorted(value, key=str)
+        except TypeError:
+            items = list(value)
+        return [_normalize_for_json(item) for item in items]
+    if isinstance(value, (list, tuple)):
+        return [_normalize_for_json(item) for item in value]
+    if hasattr(value, "item"):
+        try:
+            item_value = value.item()
+            # Guard against scalar-like objects whose .item() returns self.
+            if item_value is value:
+                return str(value)
+            return _normalize_for_json(item_value)
+        except (TypeError, ValueError):
+            return value
+    return value
+
+
 class PersistentState(SystemState):
 
     def __init__(self):
@@ -20,7 +68,7 @@ class PersistentState(SystemState):
     def save(self):
         os.makedirs(os.path.dirname(STATE_PATH), exist_ok=True)
 
-        data = {
+        data = _normalize_for_json({
             "capital": self.capital,
             "memory": self.memory,
             "total_cycles": self.total_cycles,
@@ -40,10 +88,10 @@ class PersistentState(SystemState):
                 name: s.genome.__dict__
                 for name, s in self.strategies.items()
             }
-        }
+        })
 
         with open(STATE_PATH, "w") as f:
-            json.dump(data, f)
+            json.dump(data, f, default=_json_default)
 
     def load(self):
         if not os.path.exists(STATE_PATH):

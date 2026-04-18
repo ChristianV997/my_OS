@@ -32,3 +32,15 @@ def test_bandit_weight_grows_with_mean():
     w = bandit_weight(action, g)
     bu.bandit_memory = orig
     assert w > 0
+
+
+def test_bandit_key_stability():
+    bm = BanditMemory()
+    action_a = {"campaign_id": "c-1", "variant": 7}
+    action_b = {"variant": 7, "campaign_id": "c-1"}
+
+    bm.update(action_a, 1.0)
+    bm.update(action_b, 3.0)
+
+    assert len(bm.history) == 1
+    assert bm.stats(action_a) == bm.stats(action_b)
