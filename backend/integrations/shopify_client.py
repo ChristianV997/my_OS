@@ -1,10 +1,13 @@
 import os
 import datetime
+import logging
 
 try:
     import shopify
 except ImportError:  # pragma: no cover
     shopify = None
+
+logger = logging.getLogger(__name__)
 
 SHOP_URL = os.getenv("SHOPIFY_SHOP_URL")
 API_VERSION = "2023-10"
@@ -13,6 +16,7 @@ ACCESS_TOKEN = os.getenv("SHOPIFY_ACCESS_TOKEN")
 
 def init_shopify():
     if not SHOP_URL or not ACCESS_TOKEN or shopify is None:
+        logger.info("Using Shopify fallback: missing dependency or credentials.")
         return False
 
     session = shopify.Session(SHOP_URL, API_VERSION, ACCESS_TOKEN)
@@ -28,7 +32,7 @@ def _mock_orders(since, now):
 
 
 def get_orders(last_n_minutes=60):
-    now = datetime.datetime.utcnow()
+    now = datetime.datetime.now(datetime.UTC)
     since = now - datetime.timedelta(minutes=last_n_minutes)
 
     if not init_shopify():
@@ -41,7 +45,8 @@ def get_orders(last_n_minutes=60):
         )
     except (KeyboardInterrupt, SystemExit):
         raise
-    except Exception:
+    except Exception:  # pragma: no cover
+        logger.exception("Shopify API request failed, returning fallback orders.")
         return _mock_orders(since, now)
 
     results = []

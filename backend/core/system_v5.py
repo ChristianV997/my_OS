@@ -21,6 +21,18 @@ class PersistentState(SystemState):
         os.makedirs(os.path.dirname(STATE_PATH), exist_ok=True)
 
         data = {
+            "capital": self.capital,
+            "memory": self.memory,
+            "total_cycles": self.total_cycles,
+            "regime": self.regime,
+            "detected_regime": self.detected_regime,
+            "energy": self.energy,
+            "population": self.population,
+            "event_log_rows": self.event_log.rows,
+            "graph_edges": [
+                [parent, child, weight]
+                for (parent, child), weight in self.graph.edges.items()
+            ],
             "step": self.step,
             "allocator_weights": allocator.weights,
             "evolution_scores": evolution_engine.scores,
@@ -39,6 +51,21 @@ class PersistentState(SystemState):
 
         with open(STATE_PATH, "r") as f:
             data = json.load(f)
+
+        self.capital = data.get("capital", self.capital)
+        self.memory = data.get("memory", self.memory)
+        self.total_cycles = data.get("total_cycles", self.total_cycles)
+        self.regime = data.get("regime", self.regime)
+        self.detected_regime = data.get("detected_regime", self.detected_regime)
+        self.energy = data.get("energy", self.energy)
+        self.population = data.get("population", self.population)
+        self.event_log.rows = data.get("event_log_rows", self.event_log.rows)
+
+        for edge in data.get("graph_edges", []):
+            if len(edge) != 3:
+                continue
+            parent, child, weight = edge
+            self.graph.add_edge(parent, child, weight)
 
         self.step = data.get("step", 0)
 

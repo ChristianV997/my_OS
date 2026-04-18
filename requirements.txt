@@ -4,4 +4,6 @@ fastapi
 uvicorn
 pytest
 httpx
-ShopifyAPI
+ShopifyAPI==12.7.0
+mabwiser==2.7.4
+dowhy==0.12
