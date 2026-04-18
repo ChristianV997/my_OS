@@ -89,9 +89,11 @@ def decide(state):
     for name, strat in strategy_pool.items():
 
         n_actions = allocator.allocate(name, total_budget)
+        if n_actions <= 0:
+            continue
+
         proposals = strat.propose(state)
-        if n_actions > 0:
-            proposals = proposals[:n_actions]
+        proposals = proposals[:n_actions]
 
         for action in proposals:
             if rows:
