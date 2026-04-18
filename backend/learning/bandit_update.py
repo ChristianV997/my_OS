@@ -129,8 +129,7 @@ class ContextualBanditModel:
         return candidate_arms.get(arm)
 
     def bonus(self, action, context=None):
-        recommended = self.recommend([action], context)
-        return 0.25 if recommended is not None else 0.0
+        return 0.0
 
 
 contextual_bandit = ContextualBanditModel()
