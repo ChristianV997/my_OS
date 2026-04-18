@@ -2,9 +2,12 @@ from backend.decision.scoring import causal_score
 from backend.learning.signals import roas_velocity, roas_acceleration
 from backend.learning.bandit_update import bandit_weight
 from backend.learning.calibration import calibration_model
+from backend.learning.campaign_learning import campaign_learning
 from backend.agents.strategies import strategies
 from backend.agents.allocator import allocator
 from agents.world_model import world_model
+
+CAMPAIGN_WEIGHT = 0.5
 
 
 def decide(state):
@@ -38,17 +41,23 @@ def decide(state):
 
             c_score=causal_score(action,state.graph)
             velocity_bonus=vel+acc
-            bandit_w=bandit_weight(action,state.graph)
+
+            campaign_id = action.get("campaign_id")
+            campaign_score = campaign_learning.score(campaign_id)
+
+            bandit_w=bandit_weight((name, campaign_id),state.graph)
 
             confidence = calibration_model.confidence_weight()
 
             score = (corrected_pred + c_score + velocity_bonus + bandit_w) * confidence
+            score += CAMPAIGN_WEIGHT * campaign_score
 
             decisions.append({
                 "action":action,
                 "score":score,
                 "pred": corrected_pred,
-                "strategy": name
+                "strategy": name,
+                "campaign_id": campaign_id
             })
 
     decisions.sort(key=lambda x:x["score"],reverse=True)
