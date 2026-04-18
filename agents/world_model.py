@@ -11,7 +11,13 @@ class WorldModel:
         self._fitted = set()
 
     def _featurize(self, action):
-        return np.array([float(v) for v in action.values()], dtype=float)
+        return np.array(
+            [
+                float(action.get("variant", 0)),
+                float(action.get("intensity", 0)),
+            ],
+            dtype=float,
+        )
 
     def train(self, event_log):
         rows = event_log.rows
@@ -20,7 +26,10 @@ class WorldModel:
 
         features, targets = [], {h: [] for h in self.HORIZONS}
         for r in rows:
-            action = {"variant": r.get("variant", 0)}
+            action = {
+                "variant": r.get("variant", 0),
+                "intensity": r.get("intensity", 0),
+            }
             features.append(self._featurize(action))
             base = r.get("roas", 0)
             targets["6h"].append(r.get("roas_6h", base))
@@ -36,9 +45,11 @@ class WorldModel:
 
     def predict(self, action):
         x = self._featurize(action).reshape(1, -1)
+        prior = float(action.get("variant", 0)) * 0.001
         return {
-            f"roas_{h}": float(self._models[h].predict(x)[0])
-            if h in self._fitted else 1.0
+            f"roas_{h}": (
+                float(self._models[h].predict(x)[0]) if h in self._fitted else 1.0
+            ) + prior
             for h in self.HORIZONS
         }
 
