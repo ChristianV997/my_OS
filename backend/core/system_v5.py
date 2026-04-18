@@ -6,6 +6,7 @@ from backend.agents.allocator import allocator
 from backend.agents.evolution import evolution_engine
 from backend.core.state import SystemState
 from backend.learning.campaign_learning import campaign_learning
+from backend.learning.calibration import calibration_model
 
 STATE_PATH = "backend/state/system_state.json"
 
@@ -95,7 +96,10 @@ class SystemV5:
 
         # long-term evolution
         if self.state.step % 10 == 0:
-            evolved = evolution_engine.evolve(self.state.strategies)
+            evolved = evolution_engine.evolve(
+                self.state.strategies,
+                confidence=calibration_model.confidence_weight()
+            )
             if evolved is not self.state.strategies:
                 self.state.strategies.clear()
                 self.state.strategies.update(evolved)

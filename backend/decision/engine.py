@@ -3,6 +3,7 @@ from backend.learning.signals import roas_velocity, roas_acceleration
 from backend.learning.bandit_update import bandit_weight
 from backend.learning.calibration import calibration_model
 from backend.learning.campaign_learning import campaign_learning
+from backend.decision.confidence import confidence_engine, apply_confidence
 from backend.agents.campaign_budget import campaign_budget_allocator
 from backend.agents.structural_evolution import structural_engine
 from backend.agents.strategies import strategies
@@ -20,8 +21,6 @@ def decide(state):
     if not structural_engine.population:
         structural_engine.initialize()
 
-    structure = random.choice(structural_engine.population)
-
     world_model.train(state.event_log)
 
     history=[r.get("roas",0) for r in state.event_log.rows[-10:]]
@@ -31,10 +30,30 @@ def decide(state):
     decisions=[]
 
     total_budget = 10
+    calibration_error = abs(calibration_model.stats().get("bias", 0.0))
+    reality_gap = getattr(state, "last_reality_gap", None)
+    confidence = confidence_engine.compute(reality_gap, calibration_error)
+    confidence_template = apply_confidence({"score": 1.0}, confidence)
+
+    if confidence >= 0.7:
+        structure = max(
+            structural_engine.population,
+            key=lambda s: s.get("memory", {}).get("avg_perf", 0.0)
+        )
+    else:
+        structure = random.choice(structural_engine.population)
+
+    if confidence_template.get("scale_down"):
+        total_budget = max(5, int(total_budget * 0.7))
 
     for name, strat in strategies.items():
 
-        n_actions = allocator.allocate(name, total_budget)
+        n_actions = allocator.allocate(
+            name,
+            total_budget,
+            confidence=confidence,
+            exploration_boost=confidence_template.get("exploration_boost", 0.0),
+        )
         proposals = strat.propose(state)[:n_actions]
 
         for action in proposals:
@@ -56,9 +75,7 @@ def decide(state):
             campaign_score = campaign_learning.score(campaign_id)
             budget_score = campaign_budget_allocator.get_budget(campaign_id)
 
-            bandit_w=bandit_weight((name, campaign_id),state.graph)
-
-            confidence = calibration_model.confidence_weight()
+            bandit_w = bandit_weight((name, campaign_id), state.graph, confidence=confidence)
 
             weights = structure["weights"]
 
@@ -67,19 +84,20 @@ def decide(state):
                 weights["causal"] * c_score +
                 weights["velocity"] * velocity_bonus +
                 weights["advantage"] * bandit_w
-            ) * confidence
+            )
 
             score += CAMPAIGN_WEIGHT * campaign_score
             score += BUDGET_WEIGHT * budget_score
 
-            decisions.append({
+            decision_row = {
                 "action":action,
                 "score":score,
                 "pred": corrected_pred,
                 "strategy": name,
                 "campaign_id": campaign_id,
                 "structure": structure
-            })
+            }
+            decisions.append(apply_confidence(decision_row, confidence))
 
     decisions.sort(key=lambda x:x["score"],reverse=True)
 

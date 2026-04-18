@@ -8,9 +8,12 @@ from backend.learning.update import learn
 from backend.learning.calibration import calibration_model
 from backend.learning.calibration_log import calibration_log
 from backend.learning.campaign_learning import campaign_learning
+from backend.decision.confidence import confidence_engine
 from backend.causal.update import update_causal
 from backend.regime.detector import detector
 from backend.regime.confidence import regime_confidence
+from backend.simulation.reality_gap import update_reality_gap
+from backend.agents.self_healing_guard import guarded_self_healing
 
 from backend.integrations.shopify_client import get_orders, compute_metrics
 from backend.integrations.meta_ads_client import get_ad_spend
@@ -42,12 +45,18 @@ def execute(decisions, state):
         campaign = next((c for c in campaigns if c["campaign_id"] == campaign_id), campaigns[0])
 
         campaign_spend = campaign["spend"]
+        if d.get("scale_down"):
+            campaign_spend *= 0.7
         campaign_revenue = (campaign_spend / max(total_spend, 1)) * total_revenue
 
         roas = campaign_revenue / max(campaign_spend, 1)
 
         pred = d.get("pred", 1.0)
         calibration_model.update(pred, roas)
+        gap, _params = update_reality_gap(pred, roas)
+        confidence = confidence_engine.compute(gap, pred - roas)
+        state.last_reality_gap = gap
+        state.last_confidence = confidence
 
         outcome = {
             "roas": round(roas, 4),
@@ -59,6 +68,8 @@ def execute(decisions, state):
             "window_end": ads.get("until"),
             "prediction": round(pred, 4),
             "error": round(pred - roas, 4),
+            "reality_gap": None if gap is None else round(gap, 4),
+            "confidence": round(confidence, 4),
             "timestamp": time.time()
         }
 
@@ -102,6 +113,20 @@ def run_cycle(state):
     # 🔥 structural evolution step
     if state.total_cycles % 10 == 0:
         structural_engine.evolve()
+
+    if results:
+        roas_values = [r.get("roas", 0.0) for r in results]
+        variants = [r.get("variant") for r in results if "variant" in r]
+        diversity = len(set(variants)) / max(len(variants), 1)
+        state.last_heal_actions = guarded_self_healing.run(
+            roas=sum(roas_values) / max(len(roas_values), 1),
+            diversity=diversity,
+            structural_engine=structural_engine,
+            reality_gap=state.last_reality_gap,
+            confidence=state.last_confidence,
+        )
+    else:
+        state.last_heal_actions = []
 
     state.total_cycles += 1
 
