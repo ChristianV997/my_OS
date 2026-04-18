@@ -3,7 +3,7 @@ import time
 
 from backend.decision.engine import decide
 from backend.learning.delayed_rewards import DelayedRewardStore
-from backend.learning.bandit_update import update_from_delayed
+from backend.learning.bandit_update import update_from_delayed, update_from_results
 from backend.learning.update import learn
 from backend.learning.calibration import calibration_model
 from backend.learning.calibration_log import calibration_log
@@ -66,7 +66,7 @@ def execute(decisions, state):
         if structure:
             structural_engine.score(structure, roas)
 
-        store.log(action, outcome)
+        store.log({"action": action, "context": d.get("context_features", {})}, outcome)
         state.capital += campaign_revenue - campaign_spend
 
         results.append(outcome)
@@ -84,10 +84,12 @@ def process_delayed():
 def run_cycle(state):
     decisions = decide(state)
     results = execute(decisions, state)
+    # Online feedback for contextual bandit updates.
+    update_from_results(decisions, results)
     state.event_log.log_batch(results)
 
     state = learn(state, results)
-    state.graph = update_causal(state.graph, state.event_log)
+    state.graph = update_causal(state.graph, state.event_log, state)
 
     state.detected_regime = detector.detect(state.event_log)
     regime_confidence.update(state.detected_regime, "real_market")

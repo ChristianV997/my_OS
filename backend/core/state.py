@@ -14,3 +14,4 @@ class SystemState:
         self.capital = 1000.0
         self.memory = []
         self.total_cycles = 0
+        self.causal_insights = {}

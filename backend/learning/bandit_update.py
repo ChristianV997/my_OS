@@ -1,4 +1,15 @@
+import json
+import os
+
 import numpy as np
+
+try:
+    from mabwiser.mab import MAB, LearningPolicy
+    MABWISER_AVAILABLE = True
+except Exception:
+    MAB = None
+    LearningPolicy = None
+    MABWISER_AVAILABLE = False
 
 class BanditMemory:
 
@@ -28,18 +39,133 @@ class BanditMemory:
 bandit_memory = BanditMemory()
 
 
+class ContextualBanditModel:
+
+    CONTEXT_KEYS = [
+        "regime_code",
+        "detected_regime_code",
+        "capital",
+        "recent_roas",
+        "roas_velocity",
+        "roas_acceleration",
+        "causal_roas_effect",
+        "cycle",
+        "variant",
+        "intensity",
+    ]
+
+    def __init__(self):
+        self.model = None
+        self.is_fitted = False
+        self.actions_by_arm = {}
+        self.decisions = []
+        self.rewards = []
+        self.contexts = []
+
+    def _arm(self, action):
+        return json.dumps(action, sort_keys=True)
+
+    def _vectorize(self, context):
+        context = context or {}
+        return [float(context.get(k, 0.0)) for k in self.CONTEXT_KEYS]
+
+    def _learning_policy(self):
+        policy = os.getenv("MABWISER_POLICY", "linucb").strip().lower()
+        if policy == "thompson":
+            return LearningPolicy.ThompsonSampling()
+        if policy == "ucb":
+            return LearningPolicy.UCB1(alpha=1.0)
+        return LearningPolicy.LinUCB(alpha=1.0)
+
+    def _fit(self):
+        if not MABWISER_AVAILABLE or len(self.decisions) < 2:
+            return
+
+        arms = list(self.actions_by_arm.keys())
+        if len(arms) < 2:
+            return
+
+        self.model = MAB(arms=arms, learning_policy=self._learning_policy(), seed=7)
+        try:
+            self.model.fit(self.decisions, self.rewards, contexts=self.contexts)
+        except TypeError:
+            self.model.fit(self.decisions, self.rewards)
+        except Exception:
+            self.model = None
+            self.is_fitted = False
+            return
+
+        self.is_fitted = True
+
+    def observe(self, action, reward, context=None):
+        arm = self._arm(action)
+        self.actions_by_arm[arm] = action
+        self.decisions.append(arm)
+        self.rewards.append(float(reward))
+        self.contexts.append(self._vectorize(context))
+        self.decisions = self.decisions[-500:]
+        self.rewards = self.rewards[-500:]
+        self.contexts = self.contexts[-500:]
+        self._fit()
+
+    def recommend(self, candidate_actions, context=None):
+        if not (MABWISER_AVAILABLE and self.is_fitted and self.model):
+            return None
+
+        candidate_arms = {self._arm(a): a for a in candidate_actions}
+        if not candidate_arms:
+            return None
+
+        try:
+            prediction = self.model.predict(contexts=[self._vectorize(context)])
+            arm = prediction[0] if isinstance(prediction, list) else prediction
+        except TypeError:
+            arm = self.model.predict()
+        except Exception:
+            return None
+
+        return candidate_arms.get(arm)
+
+    def bonus(self, action, context=None):
+        recommended = self.recommend([action], context)
+        return 0.25 if recommended is not None else 0.0
+
+
+contextual_bandit = ContextualBanditModel()
+
+
 def update_from_delayed(delayed_items):
 
     for item in delayed_items:
-        action = item["decision"]
+        decision_payload = item["decision"]
+        if isinstance(decision_payload, dict) and "action" in decision_payload:
+            action = decision_payload.get("action", {})
+            context = decision_payload.get("context", {})
+        else:
+            action = decision_payload
+            context = {}
         outcome = item["outcome"]
         roas = outcome.get("roas", 0)
 
         bandit_memory.update(action, roas)
+        contextual_bandit.observe(action, roas, context)
+
+
+def update_from_results(decisions, outcomes):
+    for decision, outcome in zip(decisions, outcomes):
+        action = decision.get("action", {})
+        context = decision.get("context_features", {})
+        roas = outcome.get("roas", 0)
+        bandit_memory.update(action, roas)
+        contextual_bandit.observe(action, roas, context)
+
+
+def recommend_action(candidate_actions, context):
+    return contextual_bandit.recommend(candidate_actions, context)
 
 
 
-def bandit_weight(action, graph):
+def bandit_weight(action, graph, context=None):
 
     stats = bandit_memory.stats(action)
 
@@ -53,4 +179,6 @@ def bandit_weight(action, graph):
         if p in action:
             causal_align += w
 
-    return mean + stability + causal_align
+    mab_bonus = contextual_bandit.bonus(action, context)
+
+    return mean + stability + causal_align + mab_bonus

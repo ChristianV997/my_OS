@@ -1,6 +1,6 @@
 from backend.decision.scoring import causal_score
 from backend.learning.signals import roas_velocity, roas_acceleration
-from backend.learning.bandit_update import bandit_weight
+from backend.learning.bandit_update import bandit_weight, recommend_action
 from backend.learning.calibration import calibration_model
 from backend.learning.campaign_learning import campaign_learning
 from backend.agents.campaign_budget import campaign_budget_allocator
@@ -15,31 +15,85 @@ CAMPAIGN_WEIGHT = 0.5
 BUDGET_WEIGHT = 0.3
 
 
+REGIME_CODE = {
+    "unknown": 0.0,
+    "neutral": 0.25,
+    "stable": 0.5,
+    "growth": 0.75,
+    "decay": -0.75,
+    "volatile": -0.5,
+}
+
+
+def _safe_rows(state):
+    event_log = getattr(state, "event_log", None)
+    return getattr(event_log, "rows", [])
+
+
+def _safe_graph(state):
+    graph = getattr(state, "graph", None)
+    return graph if graph is not None else type("GraphStub", (), {"edges": {}})()
+
+
+def _context_features(state, action=None):
+    action = action or {}
+    rows = _safe_rows(state)
+    history = [float(r.get("roas", 0)) for r in rows[-10:]]
+    vel = roas_velocity(history)
+    acc = roas_acceleration(history)
+    recent_roas = sum(history) / len(history) if history else 0.0
+    causal_insights = getattr(state, "causal_insights", {}) or {}
+    best_effect = causal_insights.get("best_roas_effect", 0.0)
+    return {
+        "regime_code": REGIME_CODE.get(getattr(state, "regime", "unknown"), 0.0),
+        "detected_regime_code": REGIME_CODE.get(getattr(state, "detected_regime", "unknown"), 0.0),
+        "capital": float(getattr(state, "capital", 0.0)),
+        "recent_roas": float(recent_roas),
+        "roas_velocity": float(vel),
+        "roas_acceleration": float(acc),
+        "causal_roas_effect": float(best_effect),
+        "cycle": float(getattr(state, "total_cycles", getattr(state, "step", 0))),
+        "variant": float(action.get("variant", 0)),
+        "intensity": float(action.get("intensity", 0)),
+    }
+
+
 def decide(state):
 
     if not structural_engine.population:
         structural_engine.initialize()
 
     structure = random.choice(structural_engine.population)
+    graph = _safe_graph(state)
+    rows = _safe_rows(state)
 
-    world_model.train(state.event_log)
+    if hasattr(state, "event_log"):
+        world_model.train(state.event_log)
 
-    history=[r.get("roas",0) for r in state.event_log.rows[-10:]]
-    vel=roas_velocity(history)
-    acc=roas_acceleration(history)
+    history = [r.get("roas", 0) for r in rows[-10:]]
+    vel = roas_velocity(history)
+    acc = roas_acceleration(history)
 
     decisions=[]
 
     total_budget = 10
 
-    for name, strat in strategies.items():
+    strategy_pool = getattr(state, "strategies", None) or strategies
+
+    for name, strat in strategy_pool.items():
 
         n_actions = allocator.allocate(name, total_budget)
-        proposals = strat.propose(state)[:n_actions]
+        proposals = strat.propose(state)
+        if n_actions > 0:
+            proposals = proposals[:n_actions]
 
         for action in proposals:
 
-            preds=world_model.predict(action)
+            preds = world_model.predict({"variant": action.get("variant", 0)}) if rows else {
+                "roas_6h": 1.0,
+                "roas_12h": 1.0,
+                "roas_24h": 1.0,
+            }
 
             weighted_pred = (
                 0.5*preds["roas_6h"] +
@@ -49,14 +103,15 @@ def decide(state):
 
             corrected_pred = calibration_model.adjust_prediction(weighted_pred)
 
-            c_score = causal_score(action,state.graph) if structure["features"]["use_causal"] else 0
+            c_score = causal_score(action, graph) if structure["features"]["use_causal"] else 0
             velocity_bonus = (vel+acc) if structure["features"]["use_velocity"] else 0
 
             campaign_id = action.get("campaign_id")
             campaign_score = campaign_learning.score(campaign_id)
             budget_score = campaign_budget_allocator.get_budget(campaign_id)
 
-            bandit_w=bandit_weight((name, campaign_id),state.graph)
+            context_features = _context_features(state, action)
+            bandit_w = bandit_weight(action, graph, context_features)
 
             confidence = calibration_model.confidence_weight()
 
@@ -78,8 +133,21 @@ def decide(state):
                 "pred": corrected_pred,
                 "strategy": name,
                 "campaign_id": campaign_id,
-                "structure": structure
+                "structure": structure,
+                "context_features": context_features,
+                "causal_insights": getattr(state, "causal_insights", {}),
             })
+
+    # Optional MABWiser contextual ranking boost (falls back to score-only sorting).
+    selected = recommend_action(
+        [d.get("action", {}) for d in decisions],
+        _context_features(state),
+    )
+    if selected is not None:
+        for decision in decisions:
+            if decision.get("action") == selected:
+                decision["score"] += 0.25
+                break
 
     decisions.sort(key=lambda x:x["score"],reverse=True)
 

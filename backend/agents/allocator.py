@@ -9,6 +9,10 @@ class StrategyAllocator:
         self.performance = {k: [] for k in self.weights}
 
     def update(self, strategy, reward):
+        if strategy not in self.performance:
+            self.performance[strategy] = []
+            self.weights[strategy] = 0.3
+
         self.performance[strategy].append(reward)
         if len(self.performance[strategy]) > 50:
             self.performance[strategy] = self.performance[strategy][-50:]
@@ -25,7 +29,7 @@ class StrategyAllocator:
 
         if total > 0:
             for k in self.weights:
-                self.weights[k] = scores[k]/total
+                self.weights[k] = scores.get(k, 1.0)/total
 
     def allocate(self, strategy, total_actions):
         return int(self.weights.get(strategy,0.3) * total_actions)

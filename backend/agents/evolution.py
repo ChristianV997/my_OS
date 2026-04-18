@@ -13,6 +13,7 @@ class StrategyEvolution:
     def update(self, strategy, reward):
         if strategy not in self.scores:
             self.scores[strategy] = []
+        if strategy not in self.age:
             self.age[strategy] = 0
 
         self.scores[strategy].append(reward)

@@ -14,6 +14,8 @@ python backend/main.py
 - Learning (velocity, acceleration, advantage)
 - Causal Graph (correlation-based)
 - Delayed Rewards (time-aware updates)
+- Contextual Bandits (MABWiser with graceful fallback)
+- Causal Effect Estimation (DoWhy with refutation + fallback)
 
 ## Status
 Core loop integrated. Next: multi-horizon prediction.
