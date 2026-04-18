@@ -30,14 +30,23 @@ def random_structure():
         "parent_id": None,
         "weights": {k: random.uniform(*v) for k, v in STRUCTURE_SPACE["weights"].items()},
         "features": {f: random.choice([True, False]) for f in STRUCTURE_SPACE["features"]},
-        "planning_depth": random.randint(*STRUCTURE_SPACE["planning_depth"])
+        "planning_depth": random.randint(*STRUCTURE_SPACE["planning_depth"]),
+        "memory": {"avg_perf": 0.0, "count": 0}
     }
 
 
-def mutate_structure(structure, intensity=0.1):
+def blend_weights(a, b, alpha=0.3):
+    return {k: (1 - alpha) * a[k] + alpha * b[k] for k in a}
+
+
+def mutate_structure(structure, global_best=None, intensity=0.1):
     s = copy.deepcopy(structure)
     s["id"] = _new_id()
     s["parent_id"] = structure.get("id")
+
+    # blend with global best
+    if global_best:
+        s["weights"] = blend_weights(structure["weights"], global_best["weights"], alpha=0.3)
 
     for k in s["weights"]:
         if random.random() < 0.5:
@@ -51,6 +60,10 @@ def mutate_structure(structure, intensity=0.1):
     if random.random() < 0.3:
         delta = random.choice([-1, 1])
         s["planning_depth"] = max(1, min(5, s["planning_depth"] + delta))
+
+    # inherit memory
+    parent_mem = structure.get("memory", {"avg_perf": 0.0, "count": 0})
+    s["memory"] = parent_mem.copy()
 
     return s
 
@@ -69,6 +82,11 @@ class StructuralEvolution:
         pid = structure.get("parent_id")
 
         self.scores[sid].append(performance)
+
+        # update memory
+        mem = structure.setdefault("memory", {"avg_perf": 0.0, "count": 0})
+        mem["count"] += 1
+        mem["avg_perf"] = (mem["avg_perf"] * (mem["count"] - 1) + performance) / mem["count"]
 
         if pid:
             self.lineage_scores[pid].append(performance)
@@ -91,16 +109,20 @@ class StructuralEvolution:
         ranked.sort(key=lambda x: x[1], reverse=True)
         return [s for s, _ in ranked[:top_k]]
 
+    def global_best(self):
+        best = self.select_best(1)
+        return best[0] if best else None
+
     def evolve(self):
         best = self.select_best()
+        gbest = self.global_best()
         new_pop = []
 
         for b in best:
             new_pop.append(b)
             for _ in range(3):
-                new_pop.append(mutate_structure(b))
+                new_pop.append(mutate_structure(b, global_best=gbest))
 
-        # prune weak lineage
         self.population = new_pop[:10]
 
 
