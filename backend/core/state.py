@@ -10,6 +10,7 @@ class SystemState:
         self.energy = {"fatigue": 0.1, "load": 0.2}
         self.population = []
         self.regime = "neutral"
+        self.detected_regime = "unknown"
         self.capital = 1000.0
         self.memory = []
         self.total_cycles = 0
