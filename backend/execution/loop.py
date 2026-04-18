@@ -4,6 +4,7 @@ from backend.decision.engine import decide
 from backend.learning.delayed_rewards import DelayedRewardStore
 from backend.learning.bandit_update import update_from_delayed
 from backend.learning.update import learn
+from backend.learning.calibration import calibration_model
 from backend.causal.update import update_causal
 
 
@@ -19,6 +20,15 @@ def execute(decisions, state):
 
         # attach action context
         outcome.update(d.get("action", {}))
+
+        # calibration update
+        pred = d.get("pred", 1.0)
+        actual = outcome.get("roas", 0)
+        calibration_model.update(pred, actual)
+
+        # store error for learning visibility
+        outcome["prediction"] = pred
+        outcome["error"] = pred - actual
 
         store.log(d["action"], outcome)
 
