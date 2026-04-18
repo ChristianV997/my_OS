@@ -13,6 +13,7 @@ from backend.regime.confidence import regime_confidence
 
 from backend.integrations.shopify_client import get_orders, compute_metrics
 from backend.integrations.meta_ads_client import get_ad_spend
+from backend.agents.structural_evolution import structural_engine
 
 store = DelayedRewardStore()
 
@@ -29,19 +30,16 @@ def execute(decisions, state):
     campaigns = ads["campaigns"]
 
     total_spend = ads["total_spend"]
-
-    # proportional attribution
     total_revenue = revenue
 
     for d in decisions:
         action = d.get("action", {})
-        campaign_id = action.get("campaign_id") or campaigns[0]["campaign_id"]
+        structure = d.get("structure")
 
+        campaign_id = action.get("campaign_id") or campaigns[0]["campaign_id"]
         campaign = next((c for c in campaigns if c["campaign_id"] == campaign_id), campaigns[0])
 
         campaign_spend = campaign["spend"]
-
-        # proportional revenue attribution
         campaign_revenue = (campaign_spend / max(total_spend, 1)) * total_revenue
 
         roas = campaign_revenue / max(campaign_spend, 1)
@@ -63,6 +61,10 @@ def execute(decisions, state):
         }
 
         outcome.update(action)
+
+        # 🔥 structural learning
+        if structure:
+            structural_engine.score(structure, roas)
 
         store.log(action, outcome)
         state.capital += campaign_revenue - campaign_spend
@@ -93,6 +95,11 @@ def run_cycle(state):
     calibration_log.log(calibration_model.stats())
 
     process_delayed()
+
+    # 🔥 structural evolution step
+    if state.total_cycles % 10 == 0:
+        structural_engine.evolve()
+
     state.total_cycles += 1
 
     return state
