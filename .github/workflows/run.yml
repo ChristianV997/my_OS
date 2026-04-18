@@ -10,6 +10,11 @@ on:
         required: false
         default: '200'
         type: string
+      drift_window:
+        description: 'Events per drift comparison window'
+        required: false
+        default: '200'
+        type: string
 
 permissions:
   contents: read
@@ -21,7 +26,7 @@ concurrency:
 jobs:
   run:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     env:
       PYTHONPATH: ${{ github.workspace }}
 
@@ -55,7 +60,7 @@ jobs:
             --cycles ${{ github.event.inputs.cycles || '200' }} \
             --state-path state/state.db
 
-      # Always save, even on failure, so state is never lost
+      # Always save state first so it's never lost even if reporting fails
       - name: Save state
         if: always()
         uses: actions/cache/save@v4
@@ -66,3 +71,21 @@ jobs:
       - name: Generate job summary
         if: always()
         run: python scripts/report.py >> $GITHUB_STEP_SUMMARY
+
+      - name: Drift detection report
+        if: always()
+        run: |
+          python scripts/drift_report.py \
+            --state-path state/state.db \
+            --window ${{ github.event.inputs.drift_window || '200' }} \
+            --out drift_report.json \
+            >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload drift report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: drift-report-${{ github.run_id }}
+          path: drift_report.json
+          retention-days: 30
+          if-no-files-found: ignore
