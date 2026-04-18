@@ -3,7 +3,7 @@ import pandas as pd
 import json
 from pathlib import Path
 
-LOG_PATH = Path(__file__).resolve().with_name("health_logs.jsonl")
+LOG_PATH = Path(__file__).resolve().parent / "health_logs.jsonl"
 
 st.set_page_config(page_title="System Health Dashboard", layout="wide")
 
