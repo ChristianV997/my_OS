@@ -1,49 +1,41 @@
 import random
 
 from backend.decision.scoring import causal_score
-from backend.learning.signals import roas_velocity, roas_acceleration, advantage
+from backend.learning.signals import roas_velocity, roas_acceleration
 from backend.learning.bandit_update import bandit_weight
+from agents.world_model import world_model
 
 
 def decide(state):
 
-    history = [r.get("roas", 0) for r in state.event_log.rows[-10:]]
+    world_model.train(state.event_log)
 
-    vel = roas_velocity(history)
-    acc = roas_acceleration(history)
+    history=[r.get("roas",0) for r in state.event_log.rows[-10:]]
+    vel=roas_velocity(history)
+    acc=roas_acceleration(history)
 
-    decisions = []
+    decisions=[]
 
     for _ in range(5):
 
-        action = {"variant": random.randint(1, 5)}
+        action={"variant":random.randint(1,5)}
 
-        world_pred = random.uniform(0.5, 2.0)
+        preds=world_model.predict(action)
 
-        c_score = causal_score(action, state.graph)
+        weighted_pred = (
+            0.5*preds["roas_6h"] +
+            0.3*preds["roas_12h"] +
+            0.2*preds["roas_24h"]
+        )
 
-        velocity_bonus = vel + acc
+        c_score=causal_score(action,state.graph)
+        velocity_bonus=vel+acc
+        bandit_w=bandit_weight(action,state.graph)
 
-        cf = world_pred * 0.9
-        adv = advantage(world_pred, cf)
+        score = weighted_pred + c_score + velocity_bonus + bandit_w
 
-        bandit_w = bandit_weight(action, state.graph)
+        decisions.append({"action":action,"score":score})
 
-        score = world_pred + c_score + velocity_bonus + adv + bandit_w
-
-        decisions.append({
-            "action": action,
-            "score": score,
-            "meta": {
-                "world": world_pred,
-                "causal": c_score,
-                "velocity": vel,
-                "acceleration": acc,
-                "advantage": adv,
-                "bandit": bandit_w
-            }
-        })
-
-    decisions.sort(key=lambda x: x["score"], reverse=True)
+    decisions.sort(key=lambda x:x["score"],reverse=True)
 
     return decisions
