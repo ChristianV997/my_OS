@@ -15,7 +15,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: system-run-${{ github.workflow }}
+  group: ${{ github.workflow }}
   cancel-in-progress: false
 
 jobs:
