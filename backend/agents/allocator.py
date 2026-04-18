@@ -1,4 +1,5 @@
 class StrategyAllocator:
+    DEFAULT_STRATEGY_SCORE = 1.0
 
     def __init__(self):
         self.weights = {
@@ -29,7 +30,7 @@ class StrategyAllocator:
 
         if total > 0:
             for k in self.weights:
-                self.weights[k] = scores.get(k, 1.0)/total
+                self.weights[k] = scores.get(k, self.DEFAULT_STRATEGY_SCORE)/total
 
     def allocate(self, strategy, total_actions):
         return int(self.weights.get(strategy,0.3) * total_actions)

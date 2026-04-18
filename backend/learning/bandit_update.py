@@ -40,6 +40,8 @@ bandit_memory = BanditMemory()
 
 
 class ContextualBanditModel:
+    HISTORY_LIMIT = 500
+    DEFAULT_SEED = int(os.getenv("MABWISER_SEED", "7"))
 
     CONTEXT_KEYS = [
         "regime_code",
@@ -85,7 +87,7 @@ class ContextualBanditModel:
         if len(arms) < 2:
             return
 
-        self.model = MAB(arms=arms, learning_policy=self._learning_policy(), seed=7)
+        self.model = MAB(arms=arms, learning_policy=self._learning_policy(), seed=self.DEFAULT_SEED)
         try:
             self.model.fit(self.decisions, self.rewards, contexts=self.contexts)
         except TypeError:
@@ -103,9 +105,9 @@ class ContextualBanditModel:
         self.decisions.append(arm)
         self.rewards.append(float(reward))
         self.contexts.append(self._vectorize(context))
-        self.decisions = self.decisions[-500:]
-        self.rewards = self.rewards[-500:]
-        self.contexts = self.contexts[-500:]
+        self.decisions = self.decisions[-self.HISTORY_LIMIT:]
+        self.rewards = self.rewards[-self.HISTORY_LIMIT:]
+        self.contexts = self.contexts[-self.HISTORY_LIMIT:]
         self._fit()
 
     def recommend(self, candidate_actions, context=None):
@@ -166,6 +168,16 @@ def recommend_action(candidate_actions, context):
 
 
 def bandit_weight(action, graph, context=None):
+    """Return a combined score for `action` from memory stats, graph alignment, and optional context.
+
+    Args:
+        action: Action payload used as the bandit key.
+        graph: Causal graph-like object with an `edges` mapping.
+        context: Optional contextual feature dictionary for MABWiser.
+
+    Returns:
+        Float score used by the decision engine ranking logic.
+    """
 
     stats = bandit_memory.stats(action)
 

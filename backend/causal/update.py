@@ -9,6 +9,8 @@ except Exception:
     CausalModel = None
     DOWHY_AVAILABLE = False
 
+CAUSAL_DOWHY_INTERVAL = 25
+
 
 def _numeric_keys(data):
     keys = []
@@ -85,7 +87,7 @@ def _dowhy_update(graph, data, state=None):
     best_effect = 0.0
 
     for treatment in candidate_treatments:
-        graph_text = "digraph { " + " ".join([f"{c} -> roas;" for c in controls]) + f" {treatment} -> roas; }}"
+        graph_text = "digraph { " + " ".join([f"{c} -> roas;" for c in controls]) + f" {treatment} -> roas; " + "}"
         try:
             model = CausalModel(
                 data=df,
@@ -131,7 +133,8 @@ def update_causal(graph, event_log, state=None):
 
     # Prefer DoWhy effect estimation + refutation; fall back to correlation graph when unavailable.
     if DOWHY_AVAILABLE and len(data) >= 60:
-        if state is not None and getattr(state, "total_cycles", 0) % 25 != 0:
+        # DoWhy estimation is intentionally throttled to reduce per-cycle latency.
+        if state is not None and getattr(state, "total_cycles", 0) % CAUSAL_DOWHY_INTERVAL != 0:
             return _correlation_fallback(graph, data, state)
         return _dowhy_update(graph, data, state)
 

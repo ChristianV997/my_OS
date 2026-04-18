@@ -13,6 +13,12 @@ import random
 
 CAMPAIGN_WEIGHT = 0.5
 BUDGET_WEIGHT = 0.3
+DEFAULT_ROAS_PREDICTION = 1.0
+DEFAULT_ROAS_PREDICTIONS = {
+    "roas_6h": DEFAULT_ROAS_PREDICTION,
+    "roas_12h": DEFAULT_ROAS_PREDICTION,
+    "roas_24h": DEFAULT_ROAS_PREDICTION,
+}
 
 
 REGIME_CODE = {
@@ -88,12 +94,10 @@ def decide(state):
             proposals = proposals[:n_actions]
 
         for action in proposals:
-
-            preds = world_model.predict({"variant": action.get("variant", 0)}) if rows else {
-                "roas_6h": 1.0,
-                "roas_12h": 1.0,
-                "roas_24h": 1.0,
-            }
+            if rows:
+                preds = world_model.predict({"variant": action.get("variant", 0)})
+            else:
+                preds = DEFAULT_ROAS_PREDICTIONS
 
             weighted_pred = (
                 0.5*preds["roas_6h"] +
