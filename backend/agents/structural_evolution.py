@@ -35,18 +35,23 @@ def random_structure():
     }
 
 
-def blend_weights(a, b, alpha=0.3):
-    return {k: (1 - alpha) * a[k] + alpha * b[k] for k in a}
+def blend_multi(weights_list):
+    keys = weights_list[0].keys()
+    return {k: sum(w[k] for w in weights_list) / len(weights_list) for k in keys}
 
 
-def mutate_structure(structure, global_best=None, intensity=0.1):
+def mutate_structure(structure, global_knowledge=None, intensity=0.1):
     s = copy.deepcopy(structure)
     s["id"] = _new_id()
     s["parent_id"] = structure.get("id")
 
-    # blend with global best
-    if global_best:
-        s["weights"] = blend_weights(structure["weights"], global_best["weights"], alpha=0.3)
+    # blend parent + global knowledge
+    if global_knowledge:
+        s["weights"] = blend_multi([structure["weights"], global_knowledge["weights"]])
+
+        for f in s["features"]:
+            if random.random() < 0.5:
+                s["features"][f] = global_knowledge["features"].get(f, s["features"][f])
 
     for k in s["weights"]:
         if random.random() < 0.5:
@@ -62,8 +67,7 @@ def mutate_structure(structure, global_best=None, intensity=0.1):
         s["planning_depth"] = max(1, min(5, s["planning_depth"] + delta))
 
     # inherit memory
-    parent_mem = structure.get("memory", {"avg_perf": 0.0, "count": 0})
-    s["memory"] = parent_mem.copy()
+    s["memory"] = structure.get("memory", {}).copy()
 
     return s
 
@@ -73,6 +77,7 @@ class StructuralEvolution:
         self.population = []
         self.scores = defaultdict(list)
         self.lineage_scores = defaultdict(list)
+        self.global_knowledge = None
 
     def initialize(self, n=5):
         self.population = [random_structure() for _ in range(n)]
@@ -83,7 +88,6 @@ class StructuralEvolution:
 
         self.scores[sid].append(performance)
 
-        # update memory
         mem = structure.setdefault("memory", {"avg_perf": 0.0, "count": 0})
         mem["count"] += 1
         mem["avg_perf"] = (mem["avg_perf"] * (mem["count"] - 1) + performance) / mem["count"]
@@ -99,7 +103,7 @@ class StructuralEvolution:
         vals = self.lineage_scores.get(sid, [])
         return sum(vals)/len(vals) if vals else 0
 
-    def select_best(self, top_k=2):
+    def select_best(self, top_k=3):
         ranked = []
         for s in self.population:
             sid = s.get("id")
@@ -109,19 +113,33 @@ class StructuralEvolution:
         ranked.sort(key=lambda x: x[1], reverse=True)
         return [s for s, _ in ranked[:top_k]]
 
-    def global_best(self):
-        best = self.select_best(1)
-        return best[0] if best else None
+    def distill_global_knowledge(self):
+        best = self.select_best()
+        if not best:
+            return
+
+        weights = [s["weights"] for s in best]
+        features = defaultdict(int)
+
+        for s in best:
+            for f, v in s["features"].items():
+                if v:
+                    features[f] += 1
+
+        self.global_knowledge = {
+            "weights": blend_multi(weights),
+            "features": {f: features[f] / len(best) > 0.5 for f in STRUCTURE_SPACE["features"]}
+        }
 
     def evolve(self):
+        self.distill_global_knowledge()
         best = self.select_best()
-        gbest = self.global_best()
         new_pop = []
 
         for b in best:
             new_pop.append(b)
             for _ in range(3):
-                new_pop.append(mutate_structure(b, global_best=gbest))
+                new_pop.append(mutate_structure(b, self.global_knowledge))
 
         self.population = new_pop[:10]
 
