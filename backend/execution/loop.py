@@ -1,6 +1,8 @@
+import logging
 import random
 
 from backend.decision.engine import decide
+from backend.decision.budget_allocator import allocate as budget_allocate, allocation_summary
 from backend.learning.delayed_rewards import DelayedRewardStore
 from backend.learning.bandit_update import update_from_delayed
 from backend.learning.update import learn
@@ -18,7 +20,7 @@ store = DelayedRewardStore()
 # Stochastic market environment — regime-driven trend with noise
 ENV = {"trend": 0.0, "regime": "stable"}
 
-COST_PER_DECISION = 100.0
+TOTAL_CYCLE_BUDGET = 500.0  # total spend per cycle, split across all decisions
 
 
 def _simulate_environment():
@@ -55,12 +57,15 @@ def _population_diversity():
 
 
 def execute(decisions, state):
+    budgets = budget_allocate(decisions, total_budget=TOTAL_CYCLE_BUDGET)
+    logging.getLogger(__name__).debug(allocation_summary(decisions, budgets))
+
     results = []
-    for d in decisions:
+    for i, d in enumerate(decisions):
         action = d.get("action", {})
         structure = d.get("structure")
         roas = _generate_roas()
-        cost = COST_PER_DECISION
+        cost = round(budgets[i], 4)
         revenue = roas * cost
 
         pred = d.get("pred", 1.0)

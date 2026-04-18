@@ -8,5 +8,6 @@ requests
 duckdb
 mapie
 evidently
+cvxpy
 # Optional — only needed for live Shopify integration
 # ShopifyAPI
