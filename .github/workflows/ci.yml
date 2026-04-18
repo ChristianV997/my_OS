@@ -54,29 +54,57 @@ jobs:
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
           pip install numpy pytest
-      - name: Intelligence checks
+      - name: Intelligence + Regime Regression Checks
         run: |
           python - << 'PY'
           import numpy as np
           from backend.core.system_v5 import SystemV5
           from backend.decision.engine import decide
           from backend.learning.campaign_learning import campaign_learning
+          from backend.ci.regression_guard import (
+              compute_metrics,
+              load_baseline,
+              compare_metrics,
+              save_baseline,
+              update_baseline,
+              detect_regime
+          )
 
           class DummyEnv:
               def execute(self, action):
-                  return {"roas": np.random.uniform(0.5,1.5), "revenue":100.0, "orders":1, "cost":50.0}
+                  return {
+                      "roas": np.random.uniform(0.5,1.5),
+                      "revenue":100.0,
+                      "orders":1,
+                      "cost":50.0
+                  }
 
           s = SystemV5()
-          preds = []
+          all_results = []
 
-          for _ in range(20):
+          for _ in range(30):
               results = s.run_cycle(DummyEnv(), decide)
-              for r in results:
-                  preds.append(r.get('prediction',0))
+              all_results.extend(results)
 
+          # core intelligence checks
+          preds = [r.get('prediction',0) for r in all_results]
           assert np.std(preds) > 0.0001, 'World model predictions constant'
           assert len(campaign_learning.history) > 0, 'Campaign learning not updating'
           assert len(s.state.strategies) > 0, 'No strategies present'
 
-          print('STRICT_OK')
+          # regime-aware regression
+          regime = detect_regime(all_results)
+          current = compute_metrics(all_results)
+          baseline = load_baseline()
+
+          failures = compare_metrics(current, baseline, regime)
+
+          if failures:
+              print('REGRESSION FAIL:', failures)
+              raise AssertionError(failures)
+
+          baseline = update_baseline(baseline, regime, current)
+          save_baseline(baseline)
+
+          print(f'STRICT_OK | regime={regime} | metrics={current}')
           PY
