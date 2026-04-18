@@ -1,4 +1,5 @@
 import numpy as np
+from backend.monitoring.root_cause_debug import print_last_decision_traces
 
 
 def compute_contributions(w, c, v, a):
@@ -32,4 +33,5 @@ def test_no_dominant_signal_over_time():
         if val > 0.8:
             print("\n--- CONTRIBUTION COLLAPSE DETECTED ---")
             print("AVERAGES:", avg)
+            print_last_decision_traces(10)
             raise AssertionError(f"Component {k} dominates with {val:.2f}")
