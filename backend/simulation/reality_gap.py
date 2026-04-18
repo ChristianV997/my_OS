@@ -19,6 +19,11 @@ class RealityGapEngine:
             "delay_scale": 0.03,
         }
 
+    def _bounded_update(self, key, target, lower, upper):
+        current = self.params[key]
+        step = max(-self.max_step[key], min(self.max_step[key], target - current))
+        return min(upper, max(lower, current + step))
+
     def update(self, simulated_roas: float, real_roas: float | None):
         """Update with latest simulated and (optional) real outcome."""
         self.sim.append(simulated_roas)
@@ -71,36 +76,9 @@ class RealityGapEngine:
                 else:
                     target_delay += 0.05
 
-        self.params["noise_scale"] = min(
-            1.0,
-            max(
-                0.05,
-                self.params["noise_scale"] + max(
-                    -self.max_step["noise_scale"],
-                    min(self.max_step["noise_scale"], target_noise - self.params["noise_scale"])
-                )
-            )
-        )
-        self.params["trend_scale"] = min(
-            2.0,
-            max(
-                0.5,
-                self.params["trend_scale"] + max(
-                    -self.max_step["trend_scale"],
-                    min(self.max_step["trend_scale"], target_trend - self.params["trend_scale"])
-                )
-            )
-        )
-        self.params["delay_scale"] = min(
-            2.0,
-            max(
-                0.5,
-                self.params["delay_scale"] + max(
-                    -self.max_step["delay_scale"],
-                    min(self.max_step["delay_scale"], target_delay - self.params["delay_scale"])
-                )
-            )
-        )
+        self.params["noise_scale"] = self._bounded_update("noise_scale", target_noise, 0.05, 1.0)
+        self.params["trend_scale"] = self._bounded_update("trend_scale", target_trend, 0.5, 2.0)
+        self.params["delay_scale"] = self._bounded_update("delay_scale", target_delay, 0.5, 2.0)
 
         return self.params
 

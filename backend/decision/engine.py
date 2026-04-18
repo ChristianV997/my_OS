@@ -14,6 +14,7 @@ import random
 
 CAMPAIGN_WEIGHT = 0.5
 BUDGET_WEIGHT = 0.3
+SCALE_DOWN_FACTOR = 0.7
 
 
 def decide(state):
@@ -44,7 +45,7 @@ def decide(state):
         structure = random.choice(structural_engine.population)
 
     if confidence_template.get("scale_down"):
-        total_budget = max(5, int(total_budget * 0.7))
+        total_budget = max(5, int(total_budget * SCALE_DOWN_FACTOR))
 
     for name, strat in strategies.items():
 

@@ -21,6 +21,7 @@ from backend.agents.structural_evolution import structural_engine
 
 store = DelayedRewardStore()
 ENV = {"trend": 0.0, "regime": "stable"}
+SCALE_DOWN_FACTOR = 0.7
 
 
 def execute(decisions, state):
@@ -46,14 +47,14 @@ def execute(decisions, state):
 
         campaign_spend = campaign["spend"]
         if d.get("scale_down"):
-            campaign_spend *= 0.7
+            campaign_spend *= SCALE_DOWN_FACTOR
         campaign_revenue = (campaign_spend / max(total_spend, 1)) * total_revenue
 
         roas = campaign_revenue / max(campaign_spend, 1)
 
         pred = d.get("pred", 1.0)
         calibration_model.update(pred, roas)
-        gap, _params = update_reality_gap(pred, roas)
+        gap, tuned_params = update_reality_gap(pred, roas)
         confidence = confidence_engine.compute(gap, pred - roas)
         state.last_reality_gap = gap
         state.last_confidence = confidence
@@ -70,6 +71,7 @@ def execute(decisions, state):
             "error": round(pred - roas, 4),
             "reality_gap": None if gap is None else round(gap, 4),
             "confidence": round(confidence, 4),
+            "tuned_params": tuned_params,
             "timestamp": time.time()
         }
 

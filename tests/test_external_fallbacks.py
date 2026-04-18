@@ -18,6 +18,7 @@ def test_meta_ads_fallback_without_credentials(monkeypatch):
     ads = meta_ads_client.get_ad_spend(last_n_minutes=10)
     assert ads["total_spend"] > 0
     assert len(ads["campaigns"]) > 0
+    assert [c["campaign_id"] for c in ads["campaigns"]] == ["camp_1", "camp_2", "camp_3"]
 
 
 def test_system_v5_smoke_cycle():

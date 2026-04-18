@@ -80,8 +80,15 @@ class StrategyEvolution:
 
                     # apply mutation scaling
                     strength = self.mutation_strength(best, confidence=confidence)
-                    mutate_steps = max(1, int(round(strength)))
+                    if strength >= 1.35:
+                        mutate_steps = 2
+                    elif strength >= 1.1:
+                        mutate_steps = 2
+                    else:
+                        mutate_steps = 1
                     mutated = cloned
+                    # repeated mutation is intentional: lower confidence increases
+                    # cumulative exploration pressure on cloned strategies
                     for _ in range(mutate_steps):
                         mutated = mutate_strategy(mutated)
 
