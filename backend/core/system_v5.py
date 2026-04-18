@@ -4,13 +4,16 @@ import os
 from backend.agents.genome_strategies import create_initial_strategies
 from backend.agents.allocator import allocator
 from backend.agents.evolution import evolution_engine
+from backend.core.state import SystemState
+from backend.learning.campaign_learning import campaign_learning
 
 STATE_PATH = "backend/state/system_state.json"
 
 
-class PersistentState:
+class PersistentState(SystemState):
 
     def __init__(self):
+        super().__init__()
         self.strategies = create_initial_strategies()
         self.step = 0
 
@@ -72,17 +75,30 @@ class SystemV5:
 
         for d in decisions[:5]:
             outcome = env.execute(d["action"])
+            outcome["prediction"] = d.get("pred", 1.0)
+            outcome["strategy"] = d.get("strategy")
+            campaign_id = d.get("campaign_id")
+            if not campaign_id:
+                campaign_id = d["action"].get("campaign_id")
+            if not campaign_id:
+                campaign_id = "default_campaign"
+            outcome["campaign_id"] = campaign_id
 
             allocator.update(d["strategy"], outcome.get("roas", 0))
             evolution_engine.update(d["strategy"], outcome.get("roas", 0))
+            campaign_learning.update(d["action"], outcome)
 
             results.append(outcome)
+
+        if results:
+            self.state.event_log.log_batch(results)
 
         # long-term evolution
         if self.state.step % 10 == 0:
             evolved = evolution_engine.evolve(self.state.strategies)
-            self.state.strategies.clear()
-            self.state.strategies.update(evolved)
+            if evolved is not self.state.strategies:
+                self.state.strategies.clear()
+                self.state.strategies.update(evolved)
 
         self.state.save()
 

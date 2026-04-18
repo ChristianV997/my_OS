@@ -7,6 +7,7 @@ from backend.learning.bandit_update import update_from_delayed
 from backend.learning.update import learn
 from backend.learning.calibration import calibration_model
 from backend.learning.calibration_log import calibration_log
+from backend.learning.campaign_learning import campaign_learning
 from backend.causal.update import update_causal
 from backend.regime.detector import detector
 from backend.regime.confidence import regime_confidence
@@ -16,6 +17,7 @@ from backend.integrations.meta_ads_client import get_ad_spend
 from backend.agents.structural_evolution import structural_engine
 
 store = DelayedRewardStore()
+ENV = {"trend": 0.0, "regime": "stable"}
 
 
 def execute(decisions, state):
@@ -27,7 +29,7 @@ def execute(decisions, state):
 
     revenue = metrics["revenue"]
     order_count = metrics["orders"]
-    campaigns = ads["campaigns"]
+    campaigns = ads.get("campaigns") or [{"campaign_id": "fallback_campaign", "spend": 0.0}]
 
     total_spend = ads["total_spend"]
     total_revenue = revenue
@@ -61,6 +63,7 @@ def execute(decisions, state):
         }
 
         outcome.update(action)
+        campaign_learning.update(action, outcome)
 
         # 🔥 structural learning
         if structure:
