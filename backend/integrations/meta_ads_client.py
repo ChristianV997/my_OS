@@ -24,7 +24,7 @@ def get_ad_spend(last_n_minutes=60):
     ]
     campaigns = fallback_campaigns
 
-    if requests is not None and ACCESS_TOKEN and AD_ACCOUNT_ID:
+    if ACCESS_TOKEN and AD_ACCOUNT_ID and requests is not None:
         try:
             url = f"https://graph.facebook.com/{GRAPH_API_VERSION}/act_{AD_ACCOUNT_ID}/insights"
             params = {
