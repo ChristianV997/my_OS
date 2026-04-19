@@ -12,13 +12,10 @@ ACCESS_TOKEN = os.getenv("SHOPIFY_ACCESS_TOKEN")
 
 
 def init_shopify():
-    shop_url = os.getenv("SHOPIFY_SHOP_URL", SHOP_URL)
-    access_token = os.getenv("SHOPIFY_ACCESS_TOKEN", ACCESS_TOKEN)
-
-    if not shop_url or not access_token or shopify is None:
+    if not SHOP_URL or not ACCESS_TOKEN or shopify is None:
         return False
 
-    session = shopify.Session(shop_url, API_VERSION, access_token)
+    session = shopify.Session(SHOP_URL, API_VERSION, ACCESS_TOKEN)
     shopify.ShopifyResource.activate_session(session)
     return True
 
