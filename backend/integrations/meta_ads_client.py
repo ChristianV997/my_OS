@@ -2,7 +2,10 @@ import os
 import datetime
 import json
 
-import requests
+try:
+    import requests
+except ImportError:  # pragma: no cover
+    requests = None
 
 ACCESS_TOKEN = os.getenv("META_ACCESS_TOKEN")
 AD_ACCOUNT_ID = os.getenv("META_AD_ACCOUNT_ID")
@@ -21,7 +24,7 @@ def get_ad_spend(last_n_minutes=60):
     ]
     campaigns = fallback_campaigns
 
-    if ACCESS_TOKEN and AD_ACCOUNT_ID:
+    if ACCESS_TOKEN and AD_ACCOUNT_ID and requests is not None:
         try:
             url = f"https://graph.facebook.com/{GRAPH_API_VERSION}/act_{AD_ACCOUNT_ID}/insights"
             params = {
