@@ -57,7 +57,10 @@ def decide(state):
             confidence=confidence,
             exploration_boost=confidence_template.get("exploration_boost", 0.0),
         )
-        proposals = strat.propose(state)[:n_actions]
+        if n_actions <= 0:
+            continue
+        proposals = strat.propose(state)
+        proposals = proposals[:n_actions]
 
         for action in proposals:
 

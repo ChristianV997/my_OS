@@ -44,6 +44,7 @@ class PersistentState(SystemState):
         self.step = data.get("step", 0)
 
         allocator.weights.update(data.get("allocator_weights", {}))
+        allocator.ensure_strategy_keys()
         evolution_engine.scores.update(data.get("evolution_scores", {}))
 
         # restore strategies

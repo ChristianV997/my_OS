@@ -1,9 +1,13 @@
-# MarketOS v4
+# MarketOS
 
-Autonomous operating loop focused on three pillars:
-- Automated market research
-- Dropshipping execution
-- Publicity/advertising optimization
+MarketOS is focused on three pillars:
+
+1. **Automated Market Research**  
+   Regime detection and causal updates drive market understanding.
+2. **Dropshipping**  
+   Shopify order ingestion powers revenue/order signals and optimization.
+3. **Publicity / Advertising**  
+   Meta Ads campaign spend and bandit-weighted decisions optimize allocation.
 
 ## Run
 
@@ -12,12 +16,17 @@ pip install -r requirements.txt
 python backend/main.py
 ```
 
-## Modules
-- Automated Market Research: causal graph updates + regime detection
-- Dropshipping: Shopify ingestion with CI-safe fallback data
-- Publicity / Advertising: Meta Ads ingestion with CI-safe fallback data
-- Decision Engine: signals + bandit weighting + confidence calibration
-- Learning: velocity, acceleration, advantage, delayed rewards
+## Environment variables
 
-## Status
-Core loop is aligned to market research, dropshipping, and publicity workflows with graceful degradation in CI/offline environments.
+- `META_ACCESS_TOKEN`
+- `META_AD_ACCOUNT_ID`
+- `SHOPIFY_SHOP_URL`
+- `SHOPIFY_ACCESS_TOKEN`
+- `DOWHY_ENABLED` (default: `false`)
+- `DOWHY_SKIP_REFUTATION` (default: `true`)
+
+## CI/offline behavior
+
+- If Shopify or Meta credentials are missing, integrations automatically use deterministic fallback data.
+- Tests block outbound network usage to keep CI deterministic and offline-safe.
+- Default causal DoWhy estimation is disabled unless explicitly enabled with `DOWHY_ENABLED=true`.

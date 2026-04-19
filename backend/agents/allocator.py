@@ -8,15 +8,23 @@ class StrategyAllocator:
         }
         self.performance = {k: [] for k in self.weights}
 
+    def ensure_strategy_keys(self):
+        for k in self.weights:
+            self.performance.setdefault(k, [])
+
     def update(self, strategy, reward):
+        self.weights.setdefault(strategy, 0.0)
+        self.performance.setdefault(strategy, [])
         self.performance[strategy].append(reward)
         if len(self.performance[strategy]) > 50:
             self.performance[strategy] = self.performance[strategy][-50:]
 
         # recompute weights
         scores = {}
-        total = 0
-        for k, vals in self.performance.items():
+        total = 0.0
+        self.ensure_strategy_keys()
+        for k in self.weights:
+            vals = self.performance.get(k, [])
             if len(vals) == 0:
                 scores[k] = 1.0
             else:
@@ -32,6 +40,6 @@ class StrategyAllocator:
         base = self.weights.get(strategy, 0.3) * total_actions * confidence
         if strategy == "exploratory":
             base += exploration_boost * total_actions
-        return max(1, int(base))
+        return max(0, int(base))
 
 allocator = StrategyAllocator()

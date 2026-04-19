@@ -1,5 +1,6 @@
 import os
 import datetime
+import time
 
 try:
     import shopify
@@ -21,9 +22,10 @@ def init_shopify():
 
 
 def _mock_orders(since, now):
+    mock_price_offset = float(int(time.time()) % 5)
     return [
-        {"id": "mock-1", "total_price": 120.0, "created_at": since.isoformat()},
-        {"id": "mock-2", "total_price": 80.0, "created_at": now.isoformat()},
+        {"id": "mock-1", "total_price": 120.0 + mock_price_offset, "created_at": since.isoformat()},
+        {"id": "mock-2", "total_price": 80.0 + mock_price_offset, "created_at": now.isoformat()},
     ]
 
 

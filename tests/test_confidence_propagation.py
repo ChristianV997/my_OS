@@ -29,3 +29,9 @@ def test_self_healing_guard_requires_gap_and_low_confidence():
     assert guard.should_heal(reality_gap=0.8, confidence=0.2) is True
     assert guard.should_heal(reality_gap=0.8, confidence=0.8) is False
     assert guard.should_heal(reality_gap=0.2, confidence=0.2) is False
+
+
+def test_allocator_can_return_zero_actions():
+    allocator = StrategyAllocator()
+    allocator.weights["conservative"] = 0.0
+    assert allocator.allocate("conservative", total_actions=10, confidence=0.5, exploration_boost=0.0) == 0

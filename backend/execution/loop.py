@@ -39,7 +39,7 @@ def execute(decisions, state):
 
     orders = get_orders(last_n_minutes=60)
     metrics = compute_metrics(orders)
-    ads = get_ad_spend(last_n_minutes=60)
+    ads = get_ad_spend(last_n_days=1)
 
     revenue = metrics["revenue"]
     order_count = metrics["orders"]
@@ -104,7 +104,8 @@ def execute(decisions, state):
         if structure:
             structural_engine.score(structure, roas)
 
-        store.log(action, outcome)
+        if action.get("delayed", False):
+            store.log(action, outcome)
         state.capital += campaign_revenue - campaign_spend
 
         results.append(outcome)
