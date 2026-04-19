@@ -1,6 +1,9 @@
 # MarketOS v4
 
-Autonomous decision system with causal learning and delayed feedback.
+Autonomous operating loop focused on three pillars:
+- Automated market research
+- Dropshipping execution
+- Publicity/advertising optimization
 
 ## Run
 
@@ -10,11 +13,11 @@ python backend/main.py
 ```
 
 ## Modules
-- Decision Engine (signals + bandit + causal)
-- Learning (velocity, acceleration, advantage)
-- Causal Graph (correlation-based)
-- Delayed Rewards (time-aware updates)
-- Production Integration Layer (Meta/Shopify ingestion, profit loop, control API, alerts)
+- Automated Market Research: causal graph updates + regime detection
+- Dropshipping: Shopify ingestion with CI-safe fallback data
+- Publicity / Advertising: Meta Ads ingestion with CI-safe fallback data
+- Decision Engine: signals + bandit weighting + confidence calibration
+- Learning: velocity, acceleration, advantage, delayed rewards
 
 ## Status
-Core loop integrated with execution bridge + control surface.
+Core loop is aligned to market research, dropshipping, and publicity workflows with graceful degradation in CI/offline environments.

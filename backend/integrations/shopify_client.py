@@ -6,16 +6,19 @@ try:
 except ImportError:  # pragma: no cover
     shopify = None
 
-SHOP_URL = os.getenv("SHOPIFY_SHOP_URL")
 API_VERSION = "2023-10"
+SHOP_URL = os.getenv("SHOPIFY_SHOP_URL")
 ACCESS_TOKEN = os.getenv("SHOPIFY_ACCESS_TOKEN")
 
 
 def init_shopify():
-    if not SHOP_URL or not ACCESS_TOKEN or shopify is None:
+    shop_url = os.getenv("SHOPIFY_SHOP_URL", SHOP_URL)
+    access_token = os.getenv("SHOPIFY_ACCESS_TOKEN", ACCESS_TOKEN)
+
+    if not shop_url or not access_token or shopify is None:
         return False
 
-    session = shopify.Session(SHOP_URL, API_VERSION, ACCESS_TOKEN)
+    session = shopify.Session(shop_url, API_VERSION, access_token)
     shopify.ShopifyResource.activate_session(session)
     return True
 
@@ -28,7 +31,7 @@ def _mock_orders(since, now):
 
 
 def get_orders(last_n_minutes=60):
-    now = datetime.datetime.utcnow()
+    now = datetime.datetime.now(datetime.UTC)
     since = now - datetime.timedelta(minutes=last_n_minutes)
 
     if not init_shopify():
@@ -49,7 +52,7 @@ def get_orders(last_n_minutes=60):
     for o in orders:
         results.append({
             "id": o.id,
-            "total_price": float(o.total_price),
+            "total_price": float(o.total_price or 0.0),
             "created_at": o.created_at
         })
 

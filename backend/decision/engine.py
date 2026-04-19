@@ -8,6 +8,7 @@ from backend.agents.campaign_budget import campaign_budget_allocator
 from backend.agents.structural_evolution import structural_engine
 from backend.agents.strategies import strategies
 from backend.agents.allocator import allocator
+from backend.core.state import ensure_state_shape
 from agents.world_model import world_model
 
 import random
@@ -18,6 +19,7 @@ SCALE_DOWN_FACTOR = 0.7
 
 
 def decide(state):
+    state = ensure_state_shape(state)
 
     if not structural_engine.population:
         structural_engine.initialize()

@@ -2,7 +2,10 @@ import os
 import datetime
 import json
 
-import requests
+try:
+    import requests
+except ImportError:  # pragma: no cover
+    requests = None
 
 ACCESS_TOKEN = os.getenv("META_ACCESS_TOKEN")
 AD_ACCOUNT_ID = os.getenv("META_AD_ACCOUNT_ID")
@@ -12,6 +15,9 @@ GRAPH_API_VERSION = os.getenv("META_GRAPH_API_VERSION", "v20.0")
 def get_ad_spend(last_n_minutes=60):
     now = datetime.datetime.now(datetime.UTC)
     since = now - datetime.timedelta(minutes=last_n_minutes)
+    access_token = os.getenv("META_ACCESS_TOKEN", ACCESS_TOKEN)
+    ad_account_id = os.getenv("META_AD_ACCOUNT_ID", AD_ACCOUNT_ID)
+    graph_api_version = os.getenv("META_GRAPH_API_VERSION", GRAPH_API_VERSION)
 
     # fallback if credentials are missing or request fails
     fallback_campaigns = [
@@ -21,11 +27,11 @@ def get_ad_spend(last_n_minutes=60):
     ]
     campaigns = fallback_campaigns
 
-    if ACCESS_TOKEN and AD_ACCOUNT_ID:
+    if requests is not None and access_token and ad_account_id:
         try:
-            url = f"https://graph.facebook.com/{GRAPH_API_VERSION}/act_{AD_ACCOUNT_ID}/insights"
+            url = f"https://graph.facebook.com/{graph_api_version}/act_{ad_account_id}/insights"
             params = {
-                "access_token": ACCESS_TOKEN,
+                "access_token": access_token,
                 "level": "campaign",
                 "fields": "campaign_id,spend",
                 "time_range": json.dumps(

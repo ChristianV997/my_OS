@@ -14,6 +14,7 @@ from backend.regime.detector import detector
 from backend.regime.confidence import regime_confidence
 from backend.simulation.reality_gap import update_reality_gap
 from backend.agents.self_healing_guard import guarded_self_healing
+from backend.core.state import ensure_state_shape
 
 from backend.integrations.shopify_client import get_orders, compute_metrics
 from backend.integrations.meta_ads_client import get_ad_spend
@@ -33,6 +34,7 @@ EXPECTED_CTR = 0.02
 
 
 def execute(decisions, state):
+    state = ensure_state_shape(state)
     results = []
 
     orders = get_orders(last_n_minutes=60)
@@ -129,6 +131,7 @@ def process_delayed():
 
 
 def run_cycle(state):
+    state = ensure_state_shape(state)
     decisions = decide(state)
     results = execute(decisions, state)
     state.event_log.log_batch(results)
