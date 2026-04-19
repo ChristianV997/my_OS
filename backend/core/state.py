@@ -24,6 +24,7 @@ class SystemState:
 
 
 def ensure_state_shape(state):
+    """Backfill missing runtime fields in-place for legacy/partial state objects."""
     if not hasattr(state, "event_log") or state.event_log is None:
         state.event_log = EventLog()
     if not hasattr(state.event_log, "rows"):
