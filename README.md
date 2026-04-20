@@ -1,4 +1,4 @@
-# MarketOS v4
+# DropshippingOS
 
 Autonomous operating loop focused on three pillars:
 - Automated market research
