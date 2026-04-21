@@ -25,7 +25,6 @@ CREATE TABLE IF NOT EXISTS research_records (
     updated_at TEXT NOT NULL,
     dedupe_key TEXT NOT NULL UNIQUE
 );
-CREATE INDEX IF NOT EXISTS idx_research_dedupe_key ON research_records (dedupe_key);
 CREATE INDEX IF NOT EXISTS idx_research_velocity ON research_records (velocity DESC);
 CREATE INDEX IF NOT EXISTS idx_research_confidence ON research_records (confidence DESC);
 CREATE INDEX IF NOT EXISTS idx_research_freshness_ts ON research_records (freshness_ts DESC);
@@ -47,9 +46,16 @@ class ResearchMetrics:
 
 
 def generate_dedupe_key(source: str, topic: str, freshness_ts: str) -> str:
-    hour = datetime.fromisoformat(freshness_ts.replace("Z", "+00:00")).strftime("%Y-%m-%d-%H")
+    hour = _parse_iso_timestamp(freshness_ts).strftime("%Y-%m-%d-%H")
     normalized_topic = str(topic).strip().lower()
     return f"{source}:{normalized_topic}:{hour}"
+
+
+def _parse_iso_timestamp(value: str) -> datetime:
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError as err:
+        raise ResearchValidationError([{"field": "freshness_ts", "error": "invalid_iso_timestamp", "value": value}]) from err
 
 
 def validate_research_record(record: dict[str, Any]) -> None:
@@ -81,8 +87,8 @@ def validate_research_record(record: dict[str, Any]) -> None:
             errors.append({"field": "freshness_ts", "error": "invalid_type", "expected": "ISO timestamp"})
         else:
             try:
-                datetime.fromisoformat(freshness_ts.replace("Z", "+00:00"))
-            except ValueError:
+                _parse_iso_timestamp(freshness_ts)
+            except ResearchValidationError:
                 errors.append({"field": "freshness_ts", "error": "invalid_iso_timestamp"})
 
     if "raw" in record and not isinstance(record["raw"], dict):
@@ -106,9 +112,10 @@ class TrendRecordStore:
         self._ensure_schema()
 
     def _retention_days(self, value: int | None) -> int:
-        env = os.getenv("RESEARCH_RETENTION_DAYS", "30") if value is None else str(value)
         try:
-            return max(1, int(env))
+            if value is not None:
+                return max(1, int(value))
+            return max(1, int(os.getenv("RESEARCH_RETENTION_DAYS", "30")))
         except (TypeError, ValueError):
             return 30
 
@@ -128,6 +135,11 @@ class TrendRecordStore:
         if row is None:
             return None
         item = dict(row)
+        item["raw"] = json.loads(item["raw"])
+        return item
+
+    def _payload_to_record(self, payload: dict[str, Any]) -> dict[str, Any]:
+        item = dict(payload)
         item["raw"] = json.loads(item["raw"])
         return item
 
@@ -166,8 +178,7 @@ class TrendRecordStore:
                 """,
                 payload,
             )
-            row = conn.execute("SELECT * FROM research_records WHERE id = ?", (payload["id"],)).fetchone()
-        return self._row_to_record(row) or {}
+        return self._payload_to_record(payload)
 
     def upsert(self, record: dict[str, Any]) -> dict[str, Any]:
         payload = self._serialize(record)
@@ -228,7 +239,7 @@ class TrendRecordStore:
                 """,
                 (limit,),
             ).fetchall()
-        return [self._row_to_record(row) for row in rows if row is not None]
+        return [self._row_to_record(row) for row in rows]
 
     def findBySource(self, source: str) -> list[dict[str, Any]]:
         with self._connect() as conn:
@@ -240,7 +251,7 @@ class TrendRecordStore:
                 """,
                 (source,),
             ).fetchall()
-        return [self._row_to_record(row) for row in rows if row is not None]
+        return [self._row_to_record(row) for row in rows]
 
     def deleteOlderThan(self, iso_timestamp: str) -> int:
         with self._connect() as conn:
@@ -260,10 +271,7 @@ class TrendRecordStore:
                 persisted += 1
             except ResearchValidationError as err:
                 logger.error(
-                    {
-                        "event": "research_record_rejected",
-                        "errors": err.errors,
-                        "source": record.get("source"),
-                    }
+                    "Research record rejected",
+                    extra={"event": "research_record_rejected", "errors": err.errors, "source": record.get("source")},
                 )
         return persisted

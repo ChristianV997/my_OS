@@ -13,7 +13,6 @@ CREATE TABLE IF NOT EXISTS research_records (
     dedupe_key TEXT NOT NULL UNIQUE
 );
 
-CREATE INDEX IF NOT EXISTS idx_research_dedupe_key ON research_records (dedupe_key);
 CREATE INDEX IF NOT EXISTS idx_research_velocity ON research_records (velocity DESC);
 CREATE INDEX IF NOT EXISTS idx_research_confidence ON research_records (confidence DESC);
 CREATE INDEX IF NOT EXISTS idx_research_freshness_ts ON research_records (freshness_ts DESC);
