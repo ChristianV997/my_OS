@@ -19,5 +19,19 @@ python backend/main.py
 - Decision Engine: signals + bandit weighting + confidence calibration
 - Learning: velocity, acceleration, advantage, delayed rewards
 
+## Research records schema (Pillar A)
+Canonical persisted fields:
+- `id` (uuid)
+- `topic` (required string)
+- `intent` (`buy` | `research` | `compare` | `unknown`)
+- `velocity` (float)
+- `competition` (0..1 float)
+- `source` (adapter name)
+- `freshness_ts` (ISO timestamp)
+- `confidence` (0..1 float)
+- `raw` (source payload JSON)
+- `created_at`, `updated_at` (timestamps)
+- `dedupe_key` (`{source}:{topic}:{YYYY-MM-DD-HH}`)
+
 ## Status
 Core loop is aligned to market research, dropshipping, and publicity workflows with graceful degradation in CI/offline environments.

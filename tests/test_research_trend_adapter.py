@@ -1,4 +1,3 @@
-import json
 from datetime import datetime, timezone
 
 import pytest
@@ -95,7 +94,7 @@ def test_mocked_fetch_path_persists_normalized_records(tmp_path, monkeypatch):
     adapters = ResearchAdapterRegistry()
     adapters.register("google_trends_v1", FakeAdapter())
 
-    store_path = tmp_path / "research_trends.jsonl"
+    store_path = tmp_path / "research.db"
     store = TrendRecordStore(path=str(store_path))
     registry = JobRegistry(max_retries=0)
     register_research_trend_v1_job(registry, adapter_registry=adapters, store=store)
@@ -103,15 +102,14 @@ def test_mocked_fetch_path_persists_normalized_records(tmp_path, monkeypatch):
     result = registry.run("research.trend.v1")
 
     assert result["status"] == "succeeded"
-    lines = store_path.read_text(encoding="utf-8").strip().splitlines()
-    assert len(lines) == 1
-    persisted = json.loads(lines[0])
+    persisted = store.findTopN(1)[0]
     assert persisted["topic"] == "compare ai tools"
     assert persisted["intent"] == "compare"
     assert persisted["source"] == "google_trends_v1"
     assert "freshness_ts" in persisted
     assert "confidence" in persisted
     assert "velocity" in persisted
+    assert "dedupe_key" in persisted
 
 
 def test_feature_flag_disables_adapter_execution(monkeypatch):
