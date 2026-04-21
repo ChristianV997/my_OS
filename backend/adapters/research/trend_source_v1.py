@@ -1,5 +1,4 @@
 import re
-import time
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -63,12 +62,16 @@ class GoogleTrendsAdapterV1(ResearchSourceAdapter):
         language: str = "en-US",
         timezone_offset: int = 0,
         timeout_seconds: int = 15,
+        velocity_baseline: float = 1000.0,
+        confidence_baseline: float = 0.7,
     ):
         self.max_pages = max(1, max_pages)
         self.geo = geo
         self.language = language
         self.timezone_offset = timezone_offset
         self.timeout_seconds = timeout_seconds
+        self.velocity_baseline = max(1.0, float(velocity_baseline))
+        self.confidence_baseline = min(1.0, max(0.0, float(confidence_baseline)))
 
     def _request(self, date_cursor: datetime) -> dict[str, Any]:
         params = {
@@ -81,10 +84,6 @@ class GoogleTrendsAdapterV1(ResearchSourceAdapter):
         response = requests.get(self.endpoint, params=params, timeout=self.timeout_seconds)
         if response.status_code != 200:
             error_type = classify_http_error(response.status_code)
-            if error_type == ERROR_RATE_LIMIT:
-                retry_after = response.headers.get("Retry-After")
-                if retry_after and retry_after.isdigit():
-                    time.sleep(min(int(retry_after), 2))
             raise AdapterFetchError(
                 error_type,
                 f"trend source request failed with status {response.status_code}",
@@ -126,7 +125,7 @@ class GoogleTrendsAdapterV1(ResearchSourceAdapter):
             raise AdapterFetchError(ERROR_SCHEMA, "trend record missing topic query")
 
         traffic = _parse_traffic(raw_record.get("formattedTraffic"))
-        baseline = 1000.0
+        baseline = self.velocity_baseline if self.velocity_baseline else 1.0
         velocity = round((traffic - baseline) / baseline, 4)
         articles = raw_record.get("articles", []) or []
         competition = min(1.0, len(articles) / 10.0)
@@ -149,6 +148,6 @@ class GoogleTrendsAdapterV1(ResearchSourceAdapter):
             "competition": round(competition, 4),
             "source": self.name,
             "freshness_ts": ts,
-            "confidence": 0.7,
+            "confidence": self.confidence_baseline,
             "raw": raw_record,
         }

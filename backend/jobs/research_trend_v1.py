@@ -31,15 +31,31 @@ def _source_enabled() -> bool:
     return str(os.getenv("FF_PILLAR_A_SOURCE_V1", "false")).strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _int_env(name: str, default: int) -> int:
+    try:
+        return int(os.getenv(name, str(default)))
+    except (TypeError, ValueError):
+        return default
+
+
+def _float_env(name: str, default: float) -> float:
+    try:
+        return float(os.getenv(name, str(default)))
+    except (TypeError, ValueError):
+        return default
+
+
 def build_default_adapter_registry() -> ResearchAdapterRegistry:
     registry = ResearchAdapterRegistry()
     registry.register(
         GoogleTrendsAdapterV1.name,
         GoogleTrendsAdapterV1(
-            max_pages=int(os.getenv("PILLAR_A_SOURCE_V1_MAX_PAGES", "1")),
+            max_pages=_int_env("PILLAR_A_SOURCE_V1_MAX_PAGES", 1),
             geo=os.getenv("PILLAR_A_SOURCE_V1_GEO", "US"),
             language=os.getenv("PILLAR_A_SOURCE_V1_LANG", "en-US"),
-            timeout_seconds=int(os.getenv("PILLAR_A_SOURCE_V1_TIMEOUT_SECONDS", "15")),
+            timeout_seconds=_int_env("PILLAR_A_SOURCE_V1_TIMEOUT_SECONDS", 15),
+            velocity_baseline=_float_env("PILLAR_A_SOURCE_V1_VELOCITY_BASELINE", 1000.0),
+            confidence_baseline=_float_env("PILLAR_A_SOURCE_V1_CONFIDENCE_BASELINE", 0.7),
         ),
     )
     return registry
@@ -67,7 +83,7 @@ def register_research_trend_v1_job(
                     "reason": "feature_flag_disabled",
                 }
             )
-            return {"status": "skipped"}
+            return {"status": "skipped", "records": 0}
 
         started = time.perf_counter()
         fetched_at = datetime.now(timezone.utc)
