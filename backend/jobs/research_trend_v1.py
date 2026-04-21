@@ -122,3 +122,14 @@ def register_research_trend_v1_job(
             raise
 
     job_registry.register("research.trend.v1", run_job)
+
+
+def register_research_prune_job(job_registry: JobRegistry, *, store: TrendRecordStore | None = None) -> None:
+    record_store = store or TrendRecordStore()
+
+    def run_job() -> dict[str, Any]:
+        deleted = record_store.pruneOldRecords()
+        logger.info({"job": "research.prune", "status": "succeeded", "deleted_records": deleted})
+        return {"status": "succeeded", "deleted_records": deleted}
+
+    job_registry.register("research.prune", run_job)
