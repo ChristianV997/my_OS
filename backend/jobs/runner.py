@@ -30,6 +30,8 @@ class JobMetrics:
 
 
 def is_retryable_error(error: Exception) -> bool:
+    if hasattr(error, "retryable"):
+        return bool(getattr(error, "retryable"))
     message = str(error).lower()
     if any(marker in message for marker in ("validation", "auth", "unauthorized", "forbidden", "invalid")):
         return False

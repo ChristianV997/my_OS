@@ -1,0 +1,154 @@
+import re
+import time
+from datetime import datetime, timedelta, timezone
+from typing import Any
+
+import requests
+
+from backend.adapters.research.base import ResearchSourceAdapter
+
+
+ERROR_AUTH = "auth"
+ERROR_RATE_LIMIT = "rate_limit"
+ERROR_SERVER = "server"
+ERROR_SCHEMA = "schema"
+ERROR_UNKNOWN = "unknown"
+
+
+class AdapterFetchError(RuntimeError):
+    def __init__(self, error_type: str, message: str, context: dict[str, Any] | None = None):
+        super().__init__(message)
+        self.error_type = error_type
+        self.context = context or {}
+        self.retryable = error_type in {ERROR_RATE_LIMIT, ERROR_SERVER}
+
+
+def classify_http_error(status_code: int) -> str:
+    if status_code in {401, 403}:
+        return ERROR_AUTH
+    if status_code == 429:
+        return ERROR_RATE_LIMIT
+    if status_code >= 500:
+        return ERROR_SERVER
+    return ERROR_UNKNOWN
+
+
+def _parse_traffic(value: str | None) -> float:
+    if not value:
+        return 0.0
+    token = value.strip().replace(",", "").rstrip("+")
+    match = re.match(r"^(\d+(?:\.\d+)?)([KMB])?$", token, flags=re.IGNORECASE)
+    if not match:
+        return 0.0
+    base = float(match.group(1))
+    scale = (match.group(2) or "").upper()
+    if scale == "K":
+        base *= 1_000
+    elif scale == "M":
+        base *= 1_000_000
+    elif scale == "B":
+        base *= 1_000_000_000
+    return base
+
+
+class GoogleTrendsAdapterV1(ResearchSourceAdapter):
+    name = "google_trends_v1"
+    endpoint = "https://trends.google.com/trends/api/dailytrends"
+
+    def __init__(
+        self,
+        *,
+        max_pages: int = 1,
+        geo: str = "US",
+        language: str = "en-US",
+        timezone_offset: int = 0,
+        timeout_seconds: int = 15,
+    ):
+        self.max_pages = max(1, max_pages)
+        self.geo = geo
+        self.language = language
+        self.timezone_offset = timezone_offset
+        self.timeout_seconds = timeout_seconds
+
+    def _request(self, date_cursor: datetime) -> dict[str, Any]:
+        params = {
+            "hl": self.language,
+            "tz": self.timezone_offset,
+            "geo": self.geo,
+            "ns": 15,
+            "ed": date_cursor.strftime("%Y%m%d"),
+        }
+        response = requests.get(self.endpoint, params=params, timeout=self.timeout_seconds)
+        if response.status_code != 200:
+            error_type = classify_http_error(response.status_code)
+            if error_type == ERROR_RATE_LIMIT:
+                retry_after = response.headers.get("Retry-After")
+                if retry_after and retry_after.isdigit():
+                    time.sleep(min(int(retry_after), 2))
+            raise AdapterFetchError(
+                error_type,
+                f"trend source request failed with status {response.status_code}",
+                context={"status_code": response.status_code, "endpoint": self.endpoint},
+            )
+
+        payload = response.text.strip()
+        if payload.startswith(")]}'"):
+            payload = payload[4:].strip()
+        try:
+            return response.json() if payload == response.text else requests.models.complexjson.loads(payload)
+        except Exception as err:
+            raise AdapterFetchError(ERROR_SCHEMA, f"invalid trend payload: {err}") from err
+
+    def fetch(self) -> list[dict[str, Any]]:
+        records: list[dict[str, Any]] = []
+        cursor = datetime.now(timezone.utc)
+        for _ in range(self.max_pages):
+            page_payload = self._request(cursor)
+            days = (
+                page_payload.get("default", {})
+                .get("trendingSearchesDays", [])
+            )
+            if not days:
+                break
+            page_records = days[0].get("trendingSearches", [])
+            if not isinstance(page_records, list):
+                raise AdapterFetchError(ERROR_SCHEMA, "trendingSearches must be a list")
+            records.extend(page_records)
+            cursor = cursor - timedelta(days=1)
+        return records
+
+    def to_canonical(self, raw_record: dict[str, Any], fetched_at: datetime | None = None) -> dict[str, Any]:
+        if not isinstance(raw_record, dict):
+            raise AdapterFetchError(ERROR_SCHEMA, "raw trend record must be an object")
+
+        topic = str(raw_record.get("title", {}).get("query", "")).strip()
+        if not topic:
+            raise AdapterFetchError(ERROR_SCHEMA, "trend record missing topic query")
+
+        traffic = _parse_traffic(raw_record.get("formattedTraffic"))
+        baseline = 1000.0
+        velocity = round((traffic - baseline) / baseline, 4)
+        articles = raw_record.get("articles", []) or []
+        competition = min(1.0, len(articles) / 10.0)
+
+        lowered = topic.lower()
+        if any(token in lowered for token in ("buy", "price", "deal", "coupon", "shop")):
+            intent = "buy"
+        elif any(token in lowered for token in ("vs", "versus", "compare", "best")):
+            intent = "compare"
+        elif any(token in lowered for token in ("how", "what", "guide", "review", "tutorial")):
+            intent = "research"
+        else:
+            intent = "unknown"
+
+        ts = (fetched_at or datetime.now(timezone.utc)).isoformat()
+        return {
+            "topic": topic,
+            "intent": intent,
+            "velocity": velocity,
+            "competition": round(competition, 4),
+            "source": self.name,
+            "freshness_ts": ts,
+            "confidence": 0.7,
+            "raw": raw_record,
+        }
