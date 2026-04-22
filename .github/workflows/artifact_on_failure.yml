@@ -13,7 +13,7 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v4.1.0
 
       - name: Prepare artifacts
         run: |
@@ -23,7 +23,7 @@ jobs:
           cp backend/simulation/reality_gap_log.jsonl artifacts/ || echo "no gap log"
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v4.3.1
         with:
           name: failure-debug-artifacts
           path: artifacts/
