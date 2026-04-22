@@ -1,12 +1,12 @@
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 
 LOG_PATH = "backend/monitoring/decision_trace.jsonl"
 
 
 def log_decision_trace(trace: dict):
     entry = {
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "world_model_score": trace.get("world_model_score"),
         "causal_score": trace.get("causal_score"),
         "velocity_bonus": trace.get("velocity_bonus"),

@@ -23,7 +23,10 @@ def load_data():
                 st.sidebar.caption(f"Skipped malformed JSON at line {line_number}: {exc}")
                 continue
 
-    return pd.DataFrame(data)
+    try:
+        return pd.DataFrame(data)
+    except (TypeError, ValueError):
+        return pd.DataFrame()
 
 
 df = load_data()

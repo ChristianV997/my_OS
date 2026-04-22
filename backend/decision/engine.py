@@ -15,6 +15,7 @@ import random
 
 CAMPAIGN_WEIGHT = 0.5
 BUDGET_WEIGHT = 0.3
+SCALE_DOWN_FACTOR = 0.7
 DEFAULT_ROAS_PREDICTION = 1.0
 DEFAULT_ROAS_PREDICTIONS = {
     "roas_6h": DEFAULT_ROAS_PREDICTION,
@@ -112,7 +113,11 @@ def decide(state):
             confidence=confidence,
             exploration_boost=confidence_template.get("exploration_boost", 0.0),
         )
-        proposals = strat.propose(state)[:n_actions]
+        if n_actions <= 0:
+            continue
+
+        proposals = strat.propose(state)
+        proposals = proposals[:n_actions]
 
         for action in proposals:
             if rows:
@@ -136,12 +141,7 @@ def decide(state):
             budget_score = campaign_budget_allocator.get_budget(campaign_id)
 
             context_features = _context_features(state, action)
-            bandit_w = bandit_weight(
-                action,
-                graph,
-                confidence=confidence,
-                context=context_features,
-            )
+            bandit_w = bandit_weight(action, graph, context=context_features, confidence=confidence)
 
             weights = structure["weights"]
 

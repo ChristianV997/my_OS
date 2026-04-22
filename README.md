@@ -26,8 +26,8 @@ python backend/main.py
 - Publicity / Advertising: Meta Ads ingestion with CI-safe fallback data
 - Decision Engine: signals + bandit weighting + confidence calibration
 - Learning: velocity, acceleration, advantage, delayed rewards
-- Contextual Bandits (MABWiser with graceful fallback)
-- Causal Effect Estimation (DoWhy with refutation + fallback)
+- Contextual Bandits: MABWiser integration with graceful fallback
+- Causal Effect Estimation: DoWhy with refutation + fallback
 
 ## Research records schema (Pillar A)
 Canonical persisted fields:

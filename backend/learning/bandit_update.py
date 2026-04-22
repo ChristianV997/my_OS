@@ -164,7 +164,7 @@ def update_from_results(decisions, outcomes):
 def recommend_action(candidate_actions, context):
     return contextual_bandit.recommend(candidate_actions, context)
 
-def bandit_weight(action, graph, confidence=1.0, context=None):
+def bandit_weight(action, graph, context=None, confidence=1.0):
 
     stats = bandit_memory.stats(action)
 
@@ -180,6 +180,5 @@ def bandit_weight(action, graph, confidence=1.0, context=None):
             causal_align += w
 
     mab_bonus = contextual_bandit.bonus(action, context)
-
     exploration_bonus = (1.0 - confidence) * stability
     return confidence * mean + stability + causal_align + exploration_bonus + mab_bonus
