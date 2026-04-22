@@ -72,6 +72,13 @@ def execute(decisions, state):
         roas = _generate_roas()
         cost = round(budgets[i], 4)
         revenue = roas * cost
+        clicks = max(1, int(cost * 2))
+        impressions = max(clicks, int(clicks / 0.02))
+        conversions = max(1, int(clicks * random.uniform(0.02, 0.15)))
+        ctr = clicks / impressions
+        cvr = conversions / clicks
+        cac = cost / conversions if conversions else cost
+        profit = round(revenue - cost, 2)
 
         pred = d.get("pred", 1.0)
         calibration_model.update(pred, roas)
@@ -83,6 +90,10 @@ def execute(decisions, state):
             "roas_24h":     round(max(0.01, roas * random.uniform(0.90, 1.10)), 4),
             "revenue":      round(revenue, 2),
             "cost":         cost,
+            "profit":       profit,
+            "ctr":          round(ctr, 4),
+            "cvr":          round(cvr, 4),
+            "cac":          round(cac, 4),
             "prediction":   round(pred, 4),
             "error":        round(pred - roas, 4),
             "pred_lo":      d.get("pred_lo"),

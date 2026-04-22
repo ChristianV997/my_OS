@@ -1,4 +1,4 @@
-name: System Run
+name: Data Ingestion Probe
 
 on:
   schedule:

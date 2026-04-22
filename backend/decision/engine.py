@@ -6,6 +6,7 @@ from backend.learning.signals import roas_velocity, roas_acceleration
 from backend.learning.bandit_update import bandit_weight
 from backend.learning.calibration import calibration_model
 from backend.simulation.reality_gap import reality_gap_engine
+from backend.core.state import ensure_state_shape
 from agents.world_model import world_model
 
 
@@ -16,6 +17,7 @@ def _interval_confidence(preds: dict) -> float:
 
 
 def decide(state):
+    state = ensure_state_shape(state)
     world_model.train(state.event_log)
 
     history = [r.get("roas", 0) for r in state.event_log.rows[-10:]]
