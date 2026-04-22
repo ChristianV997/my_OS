@@ -151,7 +151,7 @@ def run_cycle(state):
         "to": state.detected_regime,
     }
 
-    cooldown = max(0, int(getattr(state, "transition_cooldown", 0)))
+    cooldown = max(0, int(state.transition_cooldown))
     if transition_detected:
         cooldown = TRANSITION_COOLDOWN_CYCLES
     elif cooldown > 0:

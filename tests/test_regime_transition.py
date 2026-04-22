@@ -17,6 +17,7 @@ def test_run_cycle_tracks_transition_and_cooldown(monkeypatch):
     monkeypatch.setattr("backend.execution.loop.detector.detect", lambda _event_log: next(regimes))
 
     state = SystemState()
+    assert state.detected_regime == "unknown"
     state = run_cycle(state)
     assert state.transition["occurred"] is True
     assert state.transition["from"] == "unknown"

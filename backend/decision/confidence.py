@@ -3,6 +3,7 @@ import math
 TRANSITION_CONFIDENCE_DAMPING = 0.85
 TRANSITION_EXPLORATION_MULTIPLIER = 1.3
 TRANSITION_COOLDOWN_EXPLORATION_MULTIPLIER = 1.1
+MIN_TRANSITION_EXPLORATION_BOOST = 0.05
 
 
 class ConfidenceEngine:
@@ -59,6 +60,8 @@ def apply_confidence(decision: dict, confidence: float, transition: bool = False
 
     # Intentionally compound these multipliers: immediate transition shock plus short cooldown persistence.
     if transition:
+        if decision["exploration_boost"] == 0.0:
+            decision["exploration_boost"] = MIN_TRANSITION_EXPLORATION_BOOST
         decision["exploration_boost"] *= TRANSITION_EXPLORATION_MULTIPLIER
     if cooldown > 0:
         decision["exploration_boost"] *= TRANSITION_COOLDOWN_EXPLORATION_MULTIPLIER

@@ -36,9 +36,9 @@ def decide(state):
     calibration_error = abs(calibration_model.stats().get("bias", 0.0))
     reality_gap = getattr(state, "last_reality_gap", None)
     confidence = confidence_engine.compute(reality_gap, calibration_error)
-    transition = getattr(state, "transition", {}) or {}
+    transition = state.transition or {}
     transition_occurred = bool(transition.get("occurred"))
-    transition_cooldown = max(0, int(getattr(state, "transition_cooldown", 0)))
+    transition_cooldown = max(0, int(state.transition_cooldown))
     confidence_template = apply_confidence(
         {"score": 1.0},
         confidence,
