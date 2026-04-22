@@ -33,7 +33,13 @@ class SelfHealingEngine:
             for _ in range(2):
                 mutated = mutate_structure(s, structural_engine.global_knowledge, intensity=0.3)
                 new_population.append(mutated)
-        structural_engine.population = structural_engine.enforce_diversity(new_population) or new_population
+        diverse_population = structural_engine.enforce_diversity(new_population)
+        if diverse_population:
+            structural_engine.population = diverse_population
+        elif new_population:
+            structural_engine.population = new_population
+        else:
+            structural_engine.initialize()
 
     def reset_partial_population(self, structural_engine):
         half = len(structural_engine.population) // 2

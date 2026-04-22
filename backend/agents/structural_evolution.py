@@ -96,15 +96,17 @@ class StructuralEvolution:
         self.novelty_weight = NOVELTY_WEIGHT
         self.max_archive_size = MAX_ARCHIVE_SIZE
         self._distance_cache = {}
+        self._signature_cache = {}
 
     def initialize(self, n=5):
         self.population = [random_structure() for _ in range(n)]
         self._distance_cache.clear()
+        self._signature_cache.clear()
 
     def _distance(self, a, b):
-        aid = a.get("id") or str(id(a))
-        bid = b.get("id") or str(id(b))
-        key = tuple(sorted((aid, bid)))
+        aid = a.get("id") or self._structure_signature(a)
+        bid = b.get("id") or self._structure_signature(b)
+        key = (aid, bid) if repr(aid) <= repr(bid) else (bid, aid)
         if key not in self._distance_cache:
             self._distance_cache[key] = structure_distance(a, b)
         return self._distance_cache[key]
@@ -115,14 +117,21 @@ class StructuralEvolution:
         return sum(self._distance(structure, s) for s in self.archive) / len(self.archive)
 
     def _structure_signature(self, structure):
-        rounded_weights = tuple(sorted((k, round(v, 3)) for k, v in structure["weights"].items()))
-        features = tuple(sorted(structure["features"].items()))
-        return rounded_weights, features, structure["planning_depth"]
+        sid = structure.get("id")
+        if sid and sid in self._signature_cache:
+            return self._signature_cache[sid]
+        rounded_weights = tuple(sorted((k, round(v, 3)) for k, v in structure.get("weights", {}).items()))
+        features = tuple(sorted(structure.get("features", {}).items()))
+        signature = (rounded_weights, features, structure.get("planning_depth", 1))
+        if sid:
+            self._signature_cache[sid] = signature
+        return signature
 
     def _prune_archive(self):
         overflow = len(self.archive) - self.max_archive_size
         if overflow > 0:
             self.archive = self.archive[overflow:]
+            self._distance_cache.clear()
 
     def _adapt_novelty_weight(self):
         if len(self.population) < 2:
@@ -141,7 +150,14 @@ class StructuralEvolution:
         pid = structure.get("parent_id")
 
         self.scores[sid].append(performance)
-        self.archive.append(copy.deepcopy(structure))
+        self.archive.append(
+            {
+                "id": structure.get("id"),
+                "weights": dict(structure.get("weights", {})),
+                "features": dict(structure.get("features", {})),
+                "planning_depth": structure.get("planning_depth", 1),
+            }
+        )
         self._prune_archive()
 
         mem = structure.setdefault("memory", {"avg_perf": 0.0, "count": 0})
@@ -242,6 +258,7 @@ class StructuralEvolution:
         self.population = diverse
         self._adapt_novelty_weight()
         self._distance_cache.clear()
+        self._signature_cache.clear()
 
 
 structural_engine = StructuralEvolution()

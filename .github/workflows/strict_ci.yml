@@ -5,6 +5,9 @@ on:
   schedule:
     - cron: '0 0 * * *'
 
+permissions:
+  contents: read
+
 jobs:
   strict:
     runs-on: ubuntu-latest
@@ -42,7 +45,7 @@ jobs:
           world_model.train(state.event_log)
           p1 = world_model.predict({"variant": 1, "intensity": 1.0})["roas_6h"]
           p2 = world_model.predict({"variant": 2, "intensity": 1.0})["roas_6h"]
-          assert p1 != p2, "world model not constant"
+          assert p1 != p2, "world model predictions should vary by variant"
 
           graph = CausalGraph()
           graph.add_edge("strategy_a", "roas", 0.2)
