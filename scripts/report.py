@@ -12,7 +12,7 @@ import backend.learning.calibration_log as cal_log
 import backend.regime.confidence as rc
 from backend.core.serializer import load
 
-STATE_PATH = "state/state.json"
+STATE_PATH = "state/state.db"
 
 
 def variant_stats(rows):

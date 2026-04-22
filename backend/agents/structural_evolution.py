@@ -92,9 +92,22 @@ class StructuralEvolution:
         self.scores = defaultdict(list)
         self.lineage_scores = defaultdict(list)
         self.global_knowledge = None
+        self.diversity_history: list[float] = []  # mean pairwise distance per evolve()
 
     def initialize(self, n=5):
         self.population = [random_structure() for _ in range(n)]
+
+    def population_diversity(self) -> float:
+        """Mean pairwise structure_distance across the current population."""
+        pop = self.population
+        if len(pop) < 2:
+            return 1.0
+        pairs = [
+            structure_distance(pop[i], pop[j])
+            for i in range(len(pop))
+            for j in range(i + 1, len(pop))
+        ]
+        return sum(pairs) / len(pairs)
 
     def score(self, structure, performance):
         sid = structure.get("id")
@@ -178,6 +191,7 @@ class StructuralEvolution:
                 new_pop.append(mutate_structure(b, self.global_knowledge))
 
         self.population = self.enforce_diversity(new_pop)[:10]
+        self.diversity_history.append(self.population_diversity())
 
 
 structural_engine = StructuralEvolution()

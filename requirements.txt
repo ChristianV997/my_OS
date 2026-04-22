@@ -1,10 +1,15 @@
 numpy
 scikit-learn
+statsmodels
 fastapi
 uvicorn
 pytest
 httpx
-ShopifyAPI
 requests
+duckdb
+mapie
+evidently
+cvxpy
+ShopifyAPI
 mabwiser
 dowhy

@@ -12,19 +12,26 @@ import time
 
 from backend.core.state import SystemState
 from backend.execution.loop import run_cycle
+from backend.agents.structural_evolution import structural_engine
 
 
 def run_benchmark(cycles: int) -> dict:
     state = SystemState()
     capital_history = []
     roas_history = []
+    diversity_snapshots = []  # sampled every 10 cycles
 
     t0 = time.time()
-    for _ in range(cycles):
+    for i in range(cycles):
         state = run_cycle(state)
         capital_history.append(state.capital)
         if state.event_log.rows:
             roas_history.append(state.event_log.rows[-1].get("roas", 0))
+        # snapshot population diversity every 10 cycles
+        if i % 10 == 0 and structural_engine.population:
+            diversity_snapshots.append(
+                round(structural_engine.population_diversity(), 4)
+            )
 
     elapsed = time.time() - t0
 
@@ -51,6 +58,15 @@ def run_benchmark(cycles: int) -> dict:
     else:
         slope = 0.0
 
+    avg_diversity = (
+        round(sum(diversity_snapshots) / len(diversity_snapshots), 4)
+        if diversity_snapshots else None
+    )
+    min_diversity = round(min(diversity_snapshots), 4) if diversity_snapshots else None
+    diversity_collapse_events = sum(
+        1 for d in diversity_snapshots if d < 0.1
+    ) if diversity_snapshots else 0
+
     return {
         "cycles": cycles,
         "elapsed_s": round(elapsed, 2),
@@ -61,6 +77,10 @@ def run_benchmark(cycles: int) -> dict:
         "causal_edges": len(state.graph.edges),
         "memory_size": len(state.memory),
         "variant_avg_roas": {k: round(v, 4) for k, v in variant_avg.items()},
+        "population_diversity_avg": avg_diversity,
+        "population_diversity_min": min_diversity,
+        "diversity_collapse_events": diversity_collapse_events,
+        "diversity_history": diversity_snapshots,
     }
 
 
