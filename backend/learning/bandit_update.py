@@ -39,12 +39,13 @@ def update_from_delayed(delayed_items):
 
 
 
-def bandit_weight(action, graph):
+def bandit_weight(action, graph, confidence=1.0):
 
     stats = bandit_memory.stats(action)
 
     mean = stats["mean"]
     var = stats["var"]
+    confidence = max(0.05, min(1.0, confidence))
 
     stability = 1 / (1 + var)
 
@@ -53,4 +54,5 @@ def bandit_weight(action, graph):
         if p in action:
             causal_align += w
 
-    return mean + stability + causal_align
+    exploration_bonus = (1.0 - confidence) * stability
+    return confidence * mean + stability + causal_align + exploration_bonus

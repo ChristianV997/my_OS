@@ -10,5 +10,6 @@ duckdb
 mapie
 evidently
 cvxpy
-# Optional — only needed for live Shopify integration
-# ShopifyAPI
+ShopifyAPI
+mabwiser
+dowhy

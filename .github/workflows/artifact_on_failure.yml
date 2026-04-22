@@ -1,8 +1,8 @@
-name: CI Failure Artifact Export
+name: Artifact + Debug Export
 
 on:
   workflow_run:
-    workflows: ["Simulation + Market Validation"]
+    workflows: ["Simulation + Intelligence CI"]
     types:
       - completed
 
@@ -13,7 +13,7 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Prepare artifacts
         run: |
@@ -23,7 +23,7 @@ jobs:
           cp backend/simulation/reality_gap_log.jsonl artifacts/ || echo "no gap log"
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: failure-debug-artifacts
           path: artifacts/
