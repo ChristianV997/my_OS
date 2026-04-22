@@ -1,0 +1,32 @@
+{
+  "cycles": 100,
+  "elapsed_s": 5.9,
+  "final_capital": 26987.0889,
+  "capital_gain": 25987.0889,
+  "avg_roas": 2.015926,
+  "roas_trend_slope": 0.054275,
+  "causal_edges": 14,
+  "memory_size": 500,
+  "variant_avg_roas": {
+    "4": 1.928,
+    "3": 2.084,
+    "1": 1.9981,
+    "5": 2.0198,
+    "2": 2.0262
+  },
+  "population_diversity_avg": 0.2986,
+  "population_diversity_min": 0.2507,
+  "diversity_collapse_events": 0,
+  "diversity_history": [
+    0.4321,
+    0.3186,
+    0.3397,
+    0.2507,
+    0.2918,
+    0.2544,
+    0.2756,
+    0.2779,
+    0.2534,
+    0.2919
+  ]
+}
