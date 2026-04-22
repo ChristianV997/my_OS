@@ -32,16 +32,20 @@ class StrategyEvolution:
         # simple proxy: number of unique strategy names (can be extended later)
         return len(set(strategies.keys()))
 
-    def mutation_strength(self, strategy):
+    def mutation_strength(self, strategy, confidence=1.0):
+        confidence = max(0.05, min(1.0, confidence))
         vals = self.scores.get(strategy, [])
         if len(vals) < 5:
-            return 1.2  # high mutation early
+            return 1.0 + (1.0 - confidence) * 0.4
         var = max(0.01, sum((x - sum(vals)/len(vals))**2 for x in vals)/len(vals))
         if var > 0.2:
-            return 1.3  # unstable → explore more
-        return 0.9  # stable → refine
+            base = 1.2  # unstable → explore more
+        else:
+            base = 0.9  # stable → refine
+        return base + (1.0 - confidence) * 0.2
 
-    def evolve(self, strategies):
+    def evolve(self, strategies, confidence=1.0):
+        confidence = max(0.05, min(1.0, confidence))
 
         if not strategies:
             return strategies
@@ -58,14 +62,15 @@ class StrategyEvolution:
         # selective kill (but preserve minimum diversity)
         if len(strategies) > self.min_strategies:
             worst = ranked[0]
-            if self.survival_score(worst) < 0.8:
+            if self.survival_score(worst) < (0.9 - 0.2 * (1.0 - confidence)):
                 strategies.pop(worst, None)
                 self.scores.pop(worst, None)
                 self.age.pop(worst, None)
 
         # clone best with mutation
         best = ranked[-1]
-        if self.survival_score(best) > 1.2 and len(strategies) < self.max_strategies:
+        clone_threshold = 1.2 - 0.3 * (1.0 - confidence)
+        if self.survival_score(best) > clone_threshold and len(strategies) < self.max_strategies:
             new_name = f"{best}_clone_{random.randint(0,999)}"
 
             # prevent over-cloning identical structures
@@ -74,8 +79,18 @@ class StrategyEvolution:
                     cloned = copy.deepcopy(strategies[best])
 
                     # apply mutation scaling
-                    strength = self.mutation_strength(best)
-                    mutated = mutate_strategy(cloned)
+                    strength = self.mutation_strength(best, confidence=confidence)
+                    if strength >= 1.35:
+                        mutate_steps = 2
+                    elif strength >= 1.1:
+                        mutate_steps = 2
+                    else:
+                        mutate_steps = 1
+                    mutated = cloned
+                    # repeated mutation is intentional: lower confidence increases
+                    # cumulative exploration pressure on cloned strategies
+                    for _ in range(mutate_steps):
+                        mutated = mutate_strategy(mutated)
 
                     strategies[new_name] = mutated
                 except Exception:

@@ -3,16 +3,19 @@ from backend.learning.signals import roas_velocity, roas_acceleration
 from backend.learning.bandit_update import bandit_weight, recommend_action
 from backend.learning.calibration import calibration_model
 from backend.learning.campaign_learning import campaign_learning
+from backend.decision.confidence import confidence_engine, apply_confidence
 from backend.agents.campaign_budget import campaign_budget_allocator
 from backend.agents.structural_evolution import structural_engine
 from backend.agents.strategies import strategies
 from backend.agents.allocator import allocator
+from backend.core.state import ensure_state_shape
 from agents.world_model import world_model
 
 import random
 
 CAMPAIGN_WEIGHT = 0.5
 BUDGET_WEIGHT = 0.3
+SCALE_DOWN_FACTOR = 0.7
 DEFAULT_ROAS_PREDICTION = 1.0
 DEFAULT_ROAS_PREDICTIONS = {
     "roas_6h": DEFAULT_ROAS_PREDICTION,
@@ -65,15 +68,15 @@ def _context_features(state, action=None):
 
 
 def decide(state):
+    state = ensure_state_shape(state)
 
     if not structural_engine.population:
         structural_engine.initialize()
 
-    structure = random.choice(structural_engine.population)
     graph = _safe_graph(state)
     rows = _safe_rows(state)
 
-    if hasattr(state, "event_log"):
+    if hasattr(state, "event_log") and state.event_log is not None:
         world_model.train(state.event_log)
 
     history = [r.get("roas", 0) for r in rows[-10:]]
@@ -83,12 +86,32 @@ def decide(state):
     decisions=[]
 
     total_budget = 10
+    calibration_error = abs(calibration_model.stats().get("bias", 0.0))
+    reality_gap = getattr(state, "last_reality_gap", None)
+    confidence = confidence_engine.compute(reality_gap, calibration_error)
+    confidence_template = apply_confidence({"score": 1.0}, confidence)
+
+    if confidence >= 0.7:
+        structure = max(
+            structural_engine.population,
+            key=lambda s: s.get("memory", {}).get("avg_perf", 0.0)
+        )
+    else:
+        structure = random.choice(structural_engine.population)
+
+    if confidence_template.get("scale_down"):
+        total_budget = max(5, int(total_budget * SCALE_DOWN_FACTOR))
 
     strategy_pool = getattr(state, "strategies", None) or strategies
 
     for name, strat in strategy_pool.items():
 
-        n_actions = allocator.allocate(name, total_budget)
+        n_actions = allocator.allocate(
+            name,
+            total_budget,
+            confidence=confidence,
+            exploration_boost=confidence_template.get("exploration_boost", 0.0),
+        )
         if n_actions <= 0:
             continue
 
@@ -117,9 +140,7 @@ def decide(state):
             budget_score = campaign_budget_allocator.get_budget(campaign_id)
 
             context_features = _context_features(state, action)
-            bandit_w = bandit_weight(action, graph, context_features)
-
-            confidence = calibration_model.confidence_weight()
+            bandit_w = bandit_weight(action, graph, context=context_features, confidence=confidence)
 
             weights = structure["weights"]
 
@@ -128,12 +149,12 @@ def decide(state):
                 weights["causal"] * c_score +
                 weights["velocity"] * velocity_bonus +
                 weights["advantage"] * bandit_w
-            ) * confidence
+            )
 
             score += CAMPAIGN_WEIGHT * campaign_score
             score += BUDGET_WEIGHT * budget_score
 
-            decisions.append({
+            decision_row = {
                 "action":action,
                 "score":score,
                 "pred": corrected_pred,
@@ -142,7 +163,8 @@ def decide(state):
                 "structure": structure,
                 "context_features": context_features,
                 "causal_insights": getattr(state, "causal_insights", {}),
-            })
+            }
+            decisions.append(apply_confidence(decision_row, confidence))
 
     # Optional MABWiser contextual ranking boost (falls back to score-only sorting).
     selected = recommend_action(

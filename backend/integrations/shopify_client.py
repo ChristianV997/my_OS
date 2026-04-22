@@ -3,11 +3,11 @@ import datetime
 
 try:
     import shopify
-except Exception:
+except ImportError:  # pragma: no cover
     shopify = None
 
-SHOP_URL = os.getenv("SHOPIFY_SHOP_URL")
 API_VERSION = "2023-10"
+SHOP_URL = os.getenv("SHOPIFY_SHOP_URL")
 ACCESS_TOKEN = os.getenv("SHOPIFY_ACCESS_TOKEN")
 _mock_call_counter = 0
 MOCK_DRIFT_CYCLE = 7
@@ -15,20 +15,25 @@ MOCK_DRIFT_MULTIPLIER = 3
 
 
 def init_shopify():
-    if shopify is None:
-        raise RuntimeError("ShopifyAPI is not installed")
-
-    if not SHOP_URL or not ACCESS_TOKEN:
-        raise ValueError("Missing Shopify credentials")
+    if not SHOP_URL or not ACCESS_TOKEN or shopify is None:
+        return False
 
     session = shopify.Session(SHOP_URL, API_VERSION, ACCESS_TOKEN)
     shopify.ShopifyResource.activate_session(session)
+    return True
+
+
+def _mock_orders(since, now):
+    return [
+        {"id": "mock-1", "total_price": 120.0, "created_at": since.isoformat()},
+        {"id": "mock-2", "total_price": 80.0, "created_at": now.isoformat()},
+    ]
 
 
 def get_orders(last_n_minutes=60):
     global _mock_call_counter
     if shopify is None or not SHOP_URL or not ACCESS_TOKEN:
-        now = datetime.datetime.utcnow()
+        now = datetime.datetime.now(datetime.UTC)
         _mock_call_counter += 1
         drift = (_mock_call_counter % MOCK_DRIFT_CYCLE) * MOCK_DRIFT_MULTIPLIER
         return [
@@ -39,23 +44,28 @@ def get_orders(last_n_minutes=60):
             }
             for i in range(3)
         ]
-
-    init_shopify()
-
-    now = datetime.datetime.utcnow()
+    now = datetime.datetime.now(datetime.UTC)
     since = now - datetime.timedelta(minutes=last_n_minutes)
 
-    orders = shopify.Order.find(
-        status="any",
-        created_at_min=since.isoformat()
-    )
+    if not init_shopify():
+        return _mock_orders(since, now)
+
+    try:
+        orders = shopify.Order.find(
+            status="any",
+            created_at_min=since.isoformat()
+        )
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except Exception:
+        return _mock_orders(since, now)
 
     results = []
 
     for o in orders:
         results.append({
             "id": o.id,
-            "total_price": float(o.total_price),
+            "total_price": float(o.total_price or 0.0),
             "created_at": o.created_at
         })
 

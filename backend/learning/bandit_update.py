@@ -165,23 +165,13 @@ def recommend_action(candidate_actions, context):
     return contextual_bandit.recommend(candidate_actions, context)
 
 
-
-def bandit_weight(action, graph, context=None):
-    """Return a combined score for `action` from memory stats, graph alignment, and optional context.
-
-    Args:
-        action: Action payload used as the bandit key.
-        graph: Causal graph-like object with an `edges` mapping.
-        context: Optional contextual feature dictionary for MABWiser.
-
-    Returns:
-        Float score used by the decision engine ranking logic.
-    """
+def bandit_weight(action, graph, context=None, confidence=1.0):
 
     stats = bandit_memory.stats(action)
 
     mean = stats["mean"]
     var = stats["var"]
+    confidence = max(0.05, min(1.0, confidence))
 
     stability = 1 / (1 + var)
 
@@ -191,5 +181,5 @@ def bandit_weight(action, graph, context=None):
             causal_align += w
 
     mab_bonus = contextual_bandit.bonus(action, context)
-
-    return mean + stability + causal_align + mab_bonus
+    exploration_bonus = (1.0 - confidence) * stability
+    return confidence * mean + stability + causal_align + exploration_bonus + mab_bonus
