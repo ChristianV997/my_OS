@@ -32,6 +32,7 @@ SCALE_DOWN_FACTOR = 0.7
 # TODO: replace with real click/impression feeds when connector ingestion is enabled end-to-end.
 CLICKS_PER_DOLLAR = 2
 EXPECTED_CTR = 0.02
+TRANSITION_COOLDOWN_CYCLES = 5
 
 
 def execute(decisions, state):
@@ -152,7 +153,7 @@ def run_cycle(state):
 
     cooldown = max(0, int(getattr(state, "transition_cooldown", 0)))
     if transition_detected:
-        cooldown = 5
+        cooldown = TRANSITION_COOLDOWN_CYCLES
     elif cooldown > 0:
         cooldown -= 1
     state.transition_cooldown = cooldown

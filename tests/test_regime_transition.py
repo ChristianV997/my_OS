@@ -4,8 +4,11 @@ from backend.execution.loop import run_cycle
 
 
 def test_detect_transition():
+    assert detect_transition(None, None) is False
     assert detect_transition(None, "stable") is False
+    assert detect_transition("stable", None) is True
     assert detect_transition("stable", "stable") is False
+    assert detect_transition("unknown", "unknown") is False
     assert detect_transition("stable", "growth") is True
 
 
