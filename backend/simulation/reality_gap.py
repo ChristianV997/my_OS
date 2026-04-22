@@ -20,6 +20,11 @@ class RealityGapEngine:
         }
 
     def _bounded_update(self, key, target, lower, upper):
+        """Move one bounded step toward target while clamping to [lower, upper].
+
+        Uses `max_step[key]` as the maximum update magnitude per call.
+        `lower`/`upper` define the valid parameter range for the returned value.
+        """
         current = self.params[key]
         step = max(-self.max_step[key], min(self.max_step[key], target - current))
         return min(upper, max(lower, current + step))
