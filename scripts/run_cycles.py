@@ -35,7 +35,6 @@ def main():
 
     for i in range(args.cycles):
         state = run_cycle(state)
-        state.total_cycles += 1
         if state.event_log.rows:
             roas_trace.append(state.event_log.rows[-1].get("roas", 0))
 

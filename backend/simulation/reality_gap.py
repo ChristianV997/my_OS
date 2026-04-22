@@ -6,12 +6,28 @@ class RealityGapEngine:
         self.sim = deque(maxlen=window)
         self.real = deque(maxlen=window)
         self.gap = deque(maxlen=window)
+        self.smoothed_gap = None
         # tunable params for simulator
         self.params = {
             "noise_scale": 0.2,
             "trend_scale": 1.0,
             "delay_scale": 1.0,
         }
+        self.max_step = {
+            "noise_scale": 0.03,
+            "trend_scale": 0.03,
+            "delay_scale": 0.03,
+        }
+
+    def _bounded_update(self, key, target, lower, upper):
+        """Move one bounded step toward target while clamping to [lower, upper].
+
+        Uses `max_step[key]` as the maximum update magnitude per call.
+        `lower`/`upper` define the valid parameter range for the returned value.
+        """
+        current = self.params[key]
+        step = max(-self.max_step[key], min(self.max_step[key], target - current))
+        return min(upper, max(lower, current + step))
 
     def update(self, simulated_roas: float, real_roas: float | None):
         """Update with latest simulated and (optional) real outcome."""
@@ -35,16 +51,24 @@ class RealityGapEngine:
             return self.params
 
         avg_gap = sum(self.gap) / len(self.gap)
+        if self.smoothed_gap is None:
+            self.smoothed_gap = avg_gap
+        else:
+            self.smoothed_gap = 0.8 * self.smoothed_gap + 0.2 * avg_gap
 
-        # simple adaptive rules (stable + monotonic)
-        if avg_gap > 0.5:
+        target_noise = self.params["noise_scale"]
+        target_trend = self.params["trend_scale"]
+        target_delay = self.params["delay_scale"]
+
+        # adaptive rules with smoothing + bounded updates
+        if self.smoothed_gap > 0.5:
             # simulation too far → increase noise + reduce trend confidence
-            self.params["noise_scale"] = min(1.0, self.params["noise_scale"] + 0.05)
-            self.params["trend_scale"] = max(0.5, self.params["trend_scale"] - 0.05)
-        elif avg_gap < 0.2:
+            target_noise += 0.05
+            target_trend -= 0.05
+        elif self.smoothed_gap < 0.2:
             # simulation close → stabilize (less noise, stronger trend)
-            self.params["noise_scale"] = max(0.05, self.params["noise_scale"] - 0.02)
-            self.params["trend_scale"] = min(2.0, self.params["trend_scale"] + 0.02)
+            target_noise -= 0.02
+            target_trend += 0.02
 
         # delayed effects alignment (bias if sim lags/overshoots real)
         if len(self.real) >= 3 and len(self.sim) >= 3:
@@ -53,9 +77,13 @@ class RealityGapEngine:
             if abs(real_trend - sim_trend) > 0.3:
                 # adjust delay sensitivity
                 if sim_trend > real_trend:
-                    self.params["delay_scale"] = max(0.5, self.params["delay_scale"] - 0.05)
+                    target_delay -= 0.05
                 else:
-                    self.params["delay_scale"] = min(2.0, self.params["delay_scale"] + 0.05)
+                    target_delay += 0.05
+
+        self.params["noise_scale"] = self._bounded_update("noise_scale", target_noise, 0.05, 1.0)
+        self.params["trend_scale"] = self._bounded_update("trend_scale", target_trend, 0.5, 2.0)
+        self.params["delay_scale"] = self._bounded_update("delay_scale", target_delay, 0.5, 2.0)
 
         return self.params
 

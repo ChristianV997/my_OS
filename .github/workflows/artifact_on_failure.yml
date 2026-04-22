@@ -1,0 +1,32 @@
+name: Artifact + Debug Export
+
+on:
+  workflow_run:
+    workflows: ["Simulation + Intelligence CI"]
+    types:
+      - completed
+
+permissions:
+  contents: read
+
+jobs:
+  export_artifacts:
+    if: ${{ github.event.workflow_run.conclusion == 'failure' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Prepare artifacts
+        run: |
+          mkdir -p artifacts
+          cp backend/simulation/replay_log.json artifacts/ || echo "no replay log"
+          cp backend/simulation/reality_gap.json artifacts/ || echo "no reality gap summary"
+          cp backend/simulation/reality_gap_log.jsonl artifacts/ || echo "no gap log"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: failure-debug-artifacts
+          path: artifacts/
