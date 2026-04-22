@@ -4,5 +4,7 @@ fastapi
 uvicorn
 pytest
 httpx
+ShopifyAPI
+requests
 mabwiser
 dowhy

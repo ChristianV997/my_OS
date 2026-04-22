@@ -32,7 +32,11 @@ class StrategyAllocator:
             for k in self.weights:
                 self.weights[k] = scores.get(k, self.DEFAULT_STRATEGY_SCORE)/total
 
-    def allocate(self, strategy, total_actions):
-        return int(self.weights.get(strategy,0.3) * total_actions)
+    def allocate(self, strategy, total_actions, confidence=1.0, exploration_boost=0.0):
+        confidence = max(0.05, min(1.0, confidence))
+        base = self.weights.get(strategy, 0.3) * total_actions * confidence
+        if strategy == "exploratory":
+            base += exploration_boost * total_actions
+        return max(1, int(base))
 
 allocator = StrategyAllocator()
