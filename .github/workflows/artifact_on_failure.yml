@@ -6,6 +6,9 @@ on:
     types:
       - completed
 
+permissions:
+  contents: read
+
 jobs:
   export_artifacts:
     if: ${{ github.event.workflow_run.conclusion == 'failure' }}

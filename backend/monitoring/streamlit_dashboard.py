@@ -16,10 +16,11 @@ def load_data():
 
     data = []
     with open(LOG_PATH, "r") as f:
-        for line in f:
+        for line_number, line in enumerate(f, start=1):
             try:
                 data.append(json.loads(line.strip()))
-            except json.JSONDecodeError:
+            except json.JSONDecodeError as exc:
+                st.sidebar.caption(f"Skipped malformed JSON at line {line_number}: {exc}")
                 continue
 
     return pd.DataFrame(data)
