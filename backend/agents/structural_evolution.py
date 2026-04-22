@@ -97,6 +97,7 @@ class StructuralEvolution:
         self.max_archive_size = MAX_ARCHIVE_SIZE
         self._distance_cache = {}
         self._signature_cache = {}
+        self.diversity_history: list[float] = []  # mean pairwise distance per evolve()
 
     def initialize(self, n=5):
         self.population = [random_structure() for _ in range(n)]
@@ -144,6 +145,18 @@ class StructuralEvolution:
             self.novelty_weight = min(0.9, self.novelty_weight + 0.05)
         elif diversity > 0.7:
             self.novelty_weight = max(0.1, self.novelty_weight - 0.02)
+
+    def population_diversity(self) -> float:
+        """Mean pairwise structure_distance across the current population."""
+        pop = self.population
+        if len(pop) < 2:
+            return 1.0
+        pairs = [
+            structure_distance(pop[i], pop[j])
+            for i in range(len(pop))
+            for j in range(i + 1, len(pop))
+        ]
+        return sum(pairs) / len(pairs)
 
     def score(self, structure, performance):
         sid = structure.get("id")
@@ -259,6 +272,7 @@ class StructuralEvolution:
         self._adapt_novelty_weight()
         self._distance_cache.clear()
         self._signature_cache.clear()
+        self.diversity_history.append(self.population_diversity())
 
 
 structural_engine = StructuralEvolution()

@@ -1,126 +1,54 @@
-name: Simulation + Intelligence CI
+name: CI
 
 on:
   push:
     branches: [ main ]
   pull_request:
     branches: [ main ]
-  workflow_dispatch:
-  schedule:
-    - cron: '0 */6 * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  lightweight_ci:
+  test:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     env:
       PYTHONPATH: ${{ github.workspace }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      - name: Install dependencies (tolerant)
-        run: |
-          python -m pip install --upgrade pip
-          if [ -f requirements.txt ]; then pip install -r requirements.txt || true; fi
-          pip install pytest || true
-      - name: Compile check
-        run: python -m compileall -q .
-      - name: Smoke run
-        run: |
-          python - << 'PY'
-          from backend.core.system_v5 import SystemV5
-          from backend.decision.engine import decide
-          class DummyEnv:
-              def execute(self, action):
-                  return {"roas":1.0, "revenue":100.0, "orders":1, "cost":50.0}
-          s = SystemV5()
-          for _ in range(3): s.run_cycle(DummyEnv(), decide)
-          print('LIGHT_OK')
-          PY
 
-  strict_ci:
-    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
-    runs-on: ubuntu-latest
-    env:
-      PYTHONPATH: ${{ github.workspace }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: requirements.txt
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-          pip install numpy pytest
-      - name: Intelligence + Regime Regression + Meta + Hyperparam
+          python -m pip install -r requirements.txt
+
+      - name: Compile check
+        run: python -m compileall -q .
+
+      - name: Run tests
+        run: pytest tests/ -v
+
+      - name: Smoke run (10 cycles)
         run: |
           python - << 'PY'
-          import numpy as np
-
-          from backend.core.system_v5 import SystemV5
-          from backend.decision.engine import decide
-          from backend.learning.campaign_learning import campaign_learning
-          from backend.ci.regression_guard import (
-              compute_metrics,
-              load_baseline,
-              compare_metrics,
-              save_baseline,
-              update_baseline,
-              detect_regime
-          )
-          from backend.ci.meta_performance import load_meta, save_meta, step as meta_step
-          from backend.ci.hyperparam_meta import load_hp_meta, save_hp_meta, step as hp_step
-          from backend.agents.evolution import evolution_engine
-
-          class DummyEnv:
-              def execute(self, action):
-                  return {
-                      "roas": np.random.uniform(0.5,1.5),
-                      "revenue":100.0,
-                      "orders":1,
-                      "cost":50.0
-                  }
-
-          s = SystemV5()
-          all_results = []
-
-          for _ in range(30):
-              results = s.run_cycle(DummyEnv(), decide)
-              all_results.extend(results)
-
-          # core intelligence checks
-          preds = [r.get('prediction',0) for r in all_results]
-          assert np.std(preds) > 0.0001, 'World model predictions constant'
-          assert len(campaign_learning.history) > 0, 'Campaign learning not updating'
-          assert len(s.state.strategies) > 0, 'No strategies present'
-
-          # regime-aware regression
-          regime = detect_regime(all_results)
-          current = compute_metrics(all_results)
-          baseline = load_baseline()
-
-          failures = compare_metrics(current, baseline, regime)
-          if failures:
-              print('REGRESSION FAIL:', failures)
-              raise AssertionError(failures)
-
-          baseline = update_baseline(baseline, regime, current)
-          save_baseline(baseline)
-
-          # meta-performance tracking
-          meta = load_meta()
-          meta, status = meta_step(meta, regime, current, evolution_engine=evolution_engine)
-          save_meta(meta)
-
-          # hyperparam optimization loop
-          prev = meta.get('regimes', {}).get(regime, {}).get('ema', {}).get('avg_roas', current['avg_roas'])
-          improvement = current['avg_roas'] - prev
-
-          hp_meta = load_hp_meta()
-          hp_meta = hp_step(hp_meta, regime, improvement, evolution_engine)
-          save_hp_meta(hp_meta)
-
-          print(f'STRICT_OK | regime={regime} | metrics={current} | improvement={improvement}')
+          from backend.core.state import SystemState
+          from backend.execution.loop import run_cycle
+          s = SystemState()
+          for _ in range(10):
+              s = run_cycle(s)
+          assert len(s.event_log.rows) > 0
+          assert s.total_cycles == 10
+          print(f"OK — {s.total_cycles} cycles, capital=${s.capital:.2f}, regime={s.detected_regime}")
           PY

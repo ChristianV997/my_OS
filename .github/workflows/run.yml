@@ -10,22 +10,39 @@ on:
         required: false
         default: '200'
         type: string
+      drift_window:
+        description: 'Events per drift comparison window'
+        required: false
+        default: '200'
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   run:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     env:
       PYTHONPATH: ${{ github.workspace }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: requirements.txt
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
 
       # Restore the previous persisted state so the model keeps learning
       - name: Restore state
@@ -41,9 +58,9 @@ jobs:
         run: |
           python scripts/run_cycles.py \
             --cycles ${{ github.event.inputs.cycles || '200' }} \
-            --state-path state/state.json
+            --state-path state/state.db
 
-      # Always save, even on failure, so state is never lost
+      # Always save state first so it's never lost even if reporting fails
       - name: Save state
         if: always()
         uses: actions/cache/save@v4
@@ -54,3 +71,21 @@ jobs:
       - name: Generate job summary
         if: always()
         run: python scripts/report.py >> $GITHUB_STEP_SUMMARY
+
+      - name: Drift detection report
+        if: always()
+        run: |
+          python scripts/drift_report.py \
+            --state-path state/state.db \
+            --window ${{ github.event.inputs.drift_window || '200' }} \
+            --out drift_report.json \
+            >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload drift report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: drift-report-${{ github.run_id }}
+          path: drift_report.json
+          retention-days: 30
+          if-no-files-found: ignore

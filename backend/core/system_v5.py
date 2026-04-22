@@ -85,8 +85,10 @@ class SystemV5:
                 campaign_id = "default_campaign"
             outcome["campaign_id"] = campaign_id
 
-            allocator.update(d["strategy"], outcome.get("roas", 0))
-            evolution_engine.update(d["strategy"], outcome.get("roas", 0))
+            strategy = d.get("strategy")
+            if strategy:
+                allocator.update(strategy, outcome.get("roas", 0))
+                evolution_engine.update(strategy, outcome.get("roas", 0))
             campaign_learning.update(d["action"], outcome)
 
             results.append(outcome)

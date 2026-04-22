@@ -16,7 +16,7 @@ from backend.execution.loop import run_cycle
 def main():
     parser = argparse.ArgumentParser(description="Run MarketOS decision cycles")
     parser.add_argument("--cycles", type=int, default=200, help="Cycles to run")
-    parser.add_argument("--state-path", default="state/state.json", help="State file path")
+    parser.add_argument("--state-path", default="state/state.db", help="State file path (.db or .json)")
     args = parser.parse_args()
 
     state = load(args.state_path)
