@@ -12,6 +12,14 @@ pip install -r requirements.txt
 python backend/main.py
 ```
 
+## Run on Replit
+
+1. Import this repository into Replit.
+2. Replit will use `.replit` to install `requirements.txt` and start FastAPI automatically.
+3. Open the webview and use:
+   - `GET /status` for health
+   - `/docs` for interactive API UI
+
 ## Modules
 - Automated Market Research: causal graph updates + regime detection
 - Dropshipping: Shopify ingestion with CI-safe fallback data
