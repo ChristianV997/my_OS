@@ -1,1 +1,1 @@
-"""Package marker."""
+"""Data model package."""

@@ -1,1 +1,1 @@
-"""Package marker."""
+"""Learning package."""

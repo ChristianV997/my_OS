@@ -1,5 +1,5 @@
 import numpy as np
-from backend.decision.confidence import ConfidenceEngine
+from backend.decision.confidence import ConfidenceEngine, apply_confidence
 
 
 def test_confidence_decreases_with_gap():
@@ -37,3 +37,12 @@ def test_confidence_stability():
         print("\n--- DEBUG CONFIDENCE STABILITY ---")
         print("CONFIDENCE SERIES:", [round(x, 3) for x in confidences])
         raise AssertionError("Confidence unstable under constant conditions")
+
+
+def test_apply_confidence_controls_exploration_and_scaling():
+    low = apply_confidence({"score": 10.0}, 0.3)
+    high = apply_confidence({"score": 10.0}, 0.9)
+
+    assert low["exploration_boost"] > high["exploration_boost"]
+    assert low["scale_down"] is True
+    assert high["scale_down"] is False

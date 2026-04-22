@@ -6,6 +6,11 @@ import re
 import urllib.parse
 import urllib.request
 
+try:
+    import requests
+except ImportError:  # pragma: no cover
+    requests = None
+
 ACCESS_TOKEN = os.getenv("META_ACCESS_TOKEN")
 AD_ACCOUNT_ID = os.getenv("META_AD_ACCOUNT_ID")
 API_VERSION = os.getenv("META_API_VERSION", "v20.0")
@@ -27,8 +32,9 @@ def get_ad_spend(last_n_minutes=60):
         {"campaign_id": "camp_2", "spend": 40.0},
         {"campaign_id": "camp_3", "spend": 30.0},
     ]
+    campaigns = fallback_campaigns
 
-    if not ACCESS_TOKEN or not _is_valid_ad_account_id(AD_ACCOUNT_ID):
+    if not ACCESS_TOKEN or not _is_valid_ad_account_id(AD_ACCOUNT_ID) or requests is None:
         logger.info("Using Meta Ads fallback: missing credentials or invalid account id.")
         campaigns = fallback_campaigns
     else:
