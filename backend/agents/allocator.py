@@ -9,6 +9,8 @@ class StrategyAllocator:
         self.performance = {k: [] for k in self.weights}
 
     def update(self, strategy, reward):
+        if strategy not in self.performance:
+            return
         self.performance[strategy].append(reward)
         if len(self.performance[strategy]) > 50:
             self.performance[strategy] = self.performance[strategy][-50:]

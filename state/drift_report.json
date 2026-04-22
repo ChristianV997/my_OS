@@ -1,0 +1,35 @@
+{
+  "total_events": 1000,
+  "ref_size": 800,
+  "cur_size": 200,
+  "window": 200,
+  "share_drifted": 1.0,
+  "any_drift": true,
+  "columns": {
+    "roas": {
+      "p_value": 0.0,
+      "threshold": 0.05,
+      "drifted": true
+    },
+    "prediction": {
+      "p_value": 0.0,
+      "threshold": 0.05,
+      "drifted": true
+    },
+    "error": {
+      "p_value": 0.0,
+      "threshold": 0.05,
+      "drifted": true
+    },
+    "pred_width": {
+      "p_value": 0.0,
+      "threshold": 0.05,
+      "drifted": true
+    },
+    "env_trend": {
+      "p_value": 0.0,
+      "threshold": 0.05,
+      "drifted": true
+    }
+  }
+}

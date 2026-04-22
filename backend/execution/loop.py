@@ -1,125 +1,120 @@
+import logging
 import random
-import time
 
 from backend.decision.engine import decide
+from backend.decision.budget_allocator import allocate as budget_allocate, allocation_summary
 from backend.learning.delayed_rewards import DelayedRewardStore
 from backend.learning.bandit_update import update_from_delayed
 from backend.learning.update import learn
 from backend.learning.calibration import calibration_model
 from backend.learning.calibration_log import calibration_log
-from backend.learning.campaign_learning import campaign_learning
-from backend.decision.confidence import confidence_engine
 from backend.causal.update import update_causal
 from backend.regime.detector import detector
 from backend.regime.confidence import regime_confidence
-from backend.simulation.reality_gap import update_reality_gap
-from backend.agents.self_healing_guard import guarded_self_healing
-from backend.core.state import ensure_state_shape
-
-from backend.integrations.shopify_client import get_orders, compute_metrics
-from backend.integrations.meta_ads_client import get_ad_spend
 from backend.agents.structural_evolution import structural_engine
-from backend.agents.campaign_budget import campaign_budget_allocator
-from backend.monitoring.alerting import send_slack, send_telegram
-from agents.auto_kill import should_kill
-from core.cac import estimate_cac
-from monitoring.realtime_alerts import process_event
+from backend.agents.self_healing import self_healing_engine
+from backend.simulation.reality_gap import reality_gap_engine
+import backend.ci.hyperparam_meta as hp_meta
 
 store = DelayedRewardStore()
+
+# Stochastic market environment — regime-driven trend with noise
 ENV = {"trend": 0.0, "regime": "stable"}
-SCALE_DOWN_FACTOR = 0.7
-# TODO: replace with real click/impression feeds when connector ingestion is enabled end-to-end.
-CLICKS_PER_DOLLAR = 2
-EXPECTED_CTR = 0.02
+
+# Hyperparameter meta-learning state (persisted to JSON file)
+_hp_meta_state = hp_meta.load_hp_meta()
+_prev_avg_roas: float | None = None
+
+TOTAL_CYCLE_BUDGET = 500.0  # total spend per cycle, split across all decisions
+
+
+def _simulate_environment():
+    if random.random() < 0.05:
+        ENV["regime"] = random.choice(["growth", "decay", "volatile", "stable"])
+    if ENV["regime"] == "growth":
+        ENV["trend"] += random.uniform(0.01, 0.05)
+    elif ENV["regime"] == "decay":
+        ENV["trend"] -= random.uniform(0.01, 0.05)
+    elif ENV["regime"] == "volatile":
+        ENV["trend"] += random.uniform(-0.1, 0.1)
+    elif ENV["regime"] == "stable":
+        ENV["trend"] *= 0.95
+    ENV["trend"] = max(-1.0, min(1.0, ENV["trend"]))
+
+
+def _generate_roas():
+    _simulate_environment()
+    base = 1.0 + ENV["trend"]
+    noise = random.uniform(-0.3, 0.3)
+    delayed = random.uniform(-0.1, 0.1)
+    return max(0.1, base + noise + delayed)
+
+
+def _population_diversity():
+    """Mean pairwise distance across structural population."""
+    from backend.agents.structural_evolution import structure_distance
+    pop = structural_engine.population
+    if len(pop) < 2:
+        return 1.0
+    dists = [structure_distance(pop[i], pop[j])
+             for i in range(len(pop)) for j in range(i + 1, len(pop))]
+    return sum(dists) / len(dists)
 
 
 def execute(decisions, state):
-    state = ensure_state_shape(state)
+    budgets = budget_allocate(decisions, total_budget=TOTAL_CYCLE_BUDGET)
+    logging.getLogger(__name__).debug(allocation_summary(decisions, budgets))
+
     results = []
-
-    orders = get_orders(last_n_minutes=60)
-    metrics = compute_metrics(orders)
-    ads = get_ad_spend(last_n_minutes=60)
-
-    revenue = metrics["revenue"]
-    order_count = metrics["orders"]
-    campaigns = ads.get("campaigns") or [{"campaign_id": "fallback_campaign", "spend": 0.0}]
-
-    total_spend = ads["total_spend"]
-    total_revenue = revenue
-
-    for d in decisions:
+    for i, d in enumerate(decisions):
         action = d.get("action", {})
         structure = d.get("structure")
-
-        campaign_id = action.get("campaign_id") or campaigns[0]["campaign_id"]
-        campaign = next((c for c in campaigns if c["campaign_id"] == campaign_id), campaigns[0])
-
-        campaign_spend = campaign["spend"]
-        if d.get("scale_down"):
-            campaign_spend *= SCALE_DOWN_FACTOR
-        campaign_revenue = (campaign_spend / max(total_spend, 1)) * total_revenue
-
-        roas = campaign_revenue / max(campaign_spend, 1)
-        clicks = max(1, int(campaign_spend * CLICKS_PER_DOLLAR))
-        impressions = max(clicks, int(clicks / EXPECTED_CTR))
-        conversions = max(1, int(order_count * (campaign_spend / max(total_spend, 1))))
-        ctr = clicks / max(impressions, 1)
-        cvr = conversions / max(clicks, 1)
-        cac = estimate_cac([{"spend": campaign_spend, "conversions": conversions}])
-        profit = campaign_revenue - campaign_spend
+        roas = _generate_roas()
+        cost = round(budgets[i], 4)
+        revenue = roas * cost
+        clicks = max(1, int(cost * 2))
+        impressions = max(clicks, int(clicks / 0.02))
+        conversions = max(1, int(clicks * random.uniform(0.02, 0.15)))
+        ctr = clicks / impressions
+        cvr = conversions / clicks
+        cac = cost / conversions if conversions else cost
+        profit = round(revenue - cost, 2)
 
         pred = d.get("pred", 1.0)
         calibration_model.update(pred, roas)
-        gap, tuned_params = update_reality_gap(pred, roas)
-        confidence = confidence_engine.compute(gap, pred - roas)
-        state.last_reality_gap = gap
-        state.last_confidence = confidence
 
         outcome = {
-            "roas": round(roas, 4),
-            "revenue": round(campaign_revenue, 2),
-            "orders": order_count,
-            "cost": campaign_spend,
-            "profit": round(profit, 2),
-            "ctr": round(ctr, 4),
-            "cvr": round(cvr, 4),
-            "cac": round(cac, 4),
-            "campaign_id": campaign_id,
-            "window_start": ads.get("since"),
-            "window_end": ads.get("until"),
-            "prediction": round(pred, 4),
-            "error": round(pred - roas, 4),
-            "reality_gap": None if gap is None else round(gap, 4),
-            "confidence": round(confidence, 4),
-            "tuned_params": tuned_params,
-            "timestamp": time.time()
+            "roas":         round(roas, 4),
+            "roas_6h":      round(max(0.01, roas * random.uniform(0.70, 0.95)), 4),
+            "roas_12h":     round(max(0.01, roas * random.uniform(0.85, 1.05)), 4),
+            "roas_24h":     round(max(0.01, roas * random.uniform(0.90, 1.10)), 4),
+            "revenue":      round(revenue, 2),
+            "cost":         cost,
+            "profit":       profit,
+            "ctr":          round(ctr, 4),
+            "cvr":          round(cvr, 4),
+            "cac":          round(cac, 4),
+            "prediction":   round(pred, 4),
+            "error":        round(pred - roas, 4),
+            "pred_lo":      d.get("pred_lo"),
+            "pred_hi":      d.get("pred_hi"),
+            "pred_width":   d.get("pred_width"),
+            "interval_conf": d.get("interval_conf"),
+            "env_regime":   ENV["regime"],
+            "env_trend":    round(ENV["trend"], 4),
         }
-
         outcome.update(action)
-        campaign_learning.update(action, outcome)
-        campaign_budget_allocator.update(campaign_id, roas)
 
-        # 🔥 structural learning
+        # structural evolution scoring
         if structure:
             structural_engine.score(structure, roas)
 
+        # track reality gap (real_roas=None until external data arrives)
+        reality_gap_engine.update(roas, None)
+
         store.log(action, outcome)
-        state.capital += campaign_revenue - campaign_spend
-
+        state.capital += revenue - cost
         results.append(outcome)
-
-        if roas > 1.2:
-            send_telegram(f"🏆 winner {campaign_id} roas={round(roas, 3)}")
-            send_slack(f"🏆 winner {campaign_id} roas={round(roas, 3)}")
-
-        if should_kill(outcome):
-            outcome["killed"] = True
-            send_telegram(f"🔪 killed {campaign_id} roas={round(roas, 3)} ctr={round(ctr, 4)}")
-            send_slack(f"🔪 killed {campaign_id} roas={round(roas, 3)} ctr={round(ctr, 4)}")
-
-        process_event(outcome)
-
     return results
 
 
@@ -131,7 +126,10 @@ def process_delayed():
 
 
 def run_cycle(state):
-    state = ensure_state_shape(state)
+    # initialize structural population on first cycle
+    if not structural_engine.population:
+        structural_engine.initialize(n=5)
+
     decisions = decide(state)
     results = execute(decisions, state)
     state.event_log.log_batch(results)
@@ -140,30 +138,32 @@ def run_cycle(state):
     state.graph = update_causal(state.graph, state.event_log)
 
     state.detected_regime = detector.detect(state.event_log)
-    regime_confidence.update(state.detected_regime, "real_market")
-
+    regime_confidence.update(state.detected_regime, ENV["regime"])
     calibration_log.log(calibration_model.stats())
 
     process_delayed()
 
-    # 🔥 structural evolution step
-    if state.total_cycles % 10 == 0:
-        structural_engine.evolve()
+    # structural evolution + hyperparam meta-learning every 10 cycles
+    if state.total_cycles % 10 == 0 and state.total_cycles > 0:
+        global _hp_meta_state, _prev_avg_roas
 
-    if results:
-        roas_values = [r.get("roas", 0.0) for r in results]
-        variants = [r.get("variant") for r in results if "variant" in r]
-        diversity = len(set(variants)) / max(len(variants), 1)
-        state.last_heal_actions = guarded_self_healing.run(
-            roas=sum(roas_values) / max(len(roas_values), 1),
-            diversity=diversity,
-            structural_engine=structural_engine,
-            reality_gap=state.last_reality_gap,
-            confidence=state.last_confidence,
+        structural_engine.evolve()
+        avg_roas = (sum(r.get("roas", 0) for r in results) / max(len(results), 1))
+        diversity = _population_diversity()
+        self_healing_engine.heal(avg_roas, diversity, structural_engine)
+
+        # compute improvement vs. previous 10-cycle window
+        improvement = (avg_roas - _prev_avg_roas) if _prev_avg_roas is not None else 0.0
+        _prev_avg_roas = avg_roas
+
+        # update hyperparameter meta-learning and apply best params
+        _hp_meta_state = hp_meta.step(
+            _hp_meta_state,
+            regime=state.detected_regime,
+            improvement=improvement,
+            evolution_engine=structural_engine,
         )
-    else:
-        state.last_heal_actions = []
+        hp_meta.save_hp_meta(_hp_meta_state)
 
     state.total_cycles += 1
-
     return state
