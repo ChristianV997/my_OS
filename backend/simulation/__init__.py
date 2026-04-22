@@ -1,1 +1,1 @@
-"""Package marker."""
+"""Simulation package."""

@@ -7,3 +7,5 @@ dist/
 build/
 .env
 backend/state/*.json
+state/
+backend/state/

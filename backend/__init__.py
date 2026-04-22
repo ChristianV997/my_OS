@@ -1,1 +1,1 @@
-"""Package marker."""
+"""Backend package."""

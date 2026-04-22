@@ -37,3 +37,14 @@ def test_reality_gap_convergence():
     variance = np.var(noise_vals)
 
     assert variance < 0.1, "Parameter oscillation too high"
+
+
+def test_reality_gap_tuning_is_bounded():
+    engine = RealityGapEngine(window=30)
+
+    for _ in range(20):
+        engine.update(2.0, 0.9)
+        prev = engine.params["noise_scale"]
+        engine.tune()
+        curr = engine.params["noise_scale"]
+        assert abs(curr - prev) <= engine.max_step["noise_scale"] + 1e-9

@@ -1,1 +1,1 @@
-"""Package marker."""
+"""Regime detection package."""

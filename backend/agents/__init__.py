@@ -1,1 +1,1 @@
-"""Package marker."""
+"""Agent strategies and coordination package."""

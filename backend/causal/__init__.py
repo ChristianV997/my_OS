@@ -1,1 +1,1 @@
-"""Package marker."""
+"""Causal analysis package."""

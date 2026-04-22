@@ -9,8 +9,8 @@ except ImportError:  # pragma: no cover
 
 logger = logging.getLogger(__name__)
 
-SHOP_URL = os.getenv("SHOPIFY_SHOP_URL")
 API_VERSION = "2023-10"
+SHOP_URL = os.getenv("SHOPIFY_SHOP_URL")
 ACCESS_TOKEN = os.getenv("SHOPIFY_ACCESS_TOKEN")
 
 
@@ -54,7 +54,7 @@ def get_orders(last_n_minutes=60):
     for o in orders:
         results.append({
             "id": o.id,
-            "total_price": float(o.total_price),
+            "total_price": float(o.total_price or 0.0),
             "created_at": o.created_at
         })
 

@@ -1,1 +1,1 @@
-"""Package marker."""
+"""Top-level agents package."""
