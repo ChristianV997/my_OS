@@ -31,19 +31,6 @@ def _mock_orders(since, now):
 
 
 def get_orders(last_n_minutes=60):
-    global _mock_call_counter
-    if shopify is None or not SHOP_URL or not ACCESS_TOKEN:
-        now = datetime.datetime.now(datetime.UTC)
-        _mock_call_counter += 1
-        drift = (_mock_call_counter % MOCK_DRIFT_CYCLE) * MOCK_DRIFT_MULTIPLIER
-        return [
-            {
-                "id": f"mock_{i}",
-                "total_price": float(50 + (i * 10) + drift),
-                "created_at": now.isoformat(),
-            }
-            for i in range(3)
-        ]
     now = datetime.datetime.now(datetime.UTC)
     since = now - datetime.timedelta(minutes=last_n_minutes)
 

@@ -164,7 +164,6 @@ def update_from_results(decisions, outcomes):
 def recommend_action(candidate_actions, context):
     return contextual_bandit.recommend(candidate_actions, context)
 
-
 def bandit_weight(action, graph, context=None, confidence=1.0):
 
     stats = bandit_memory.stats(action)
