@@ -46,3 +46,12 @@ def test_apply_confidence_controls_exploration_and_scaling():
     assert low["exploration_boost"] > high["exploration_boost"]
     assert low["scale_down"] is True
     assert high["scale_down"] is False
+
+
+def test_apply_confidence_transition_temporarily_boosts_exploration_and_dampens_confidence():
+    baseline = apply_confidence({"score": 10.0}, 0.6, transition=False, cooldown=0)
+    shifted = apply_confidence({"score": 10.0}, 0.6, transition=True, cooldown=5)
+
+    assert shifted["confidence"] < baseline["confidence"]
+    assert shifted["exploration_boost"] > baseline["exploration_boost"]
+    assert shifted["transition_adjustment"]["occurred"] is True

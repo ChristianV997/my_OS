@@ -36,9 +36,18 @@ def decide(state):
     calibration_error = abs(calibration_model.stats().get("bias", 0.0))
     reality_gap = getattr(state, "last_reality_gap", None)
     confidence = confidence_engine.compute(reality_gap, calibration_error)
-    confidence_template = apply_confidence({"score": 1.0}, confidence)
+    transition = getattr(state, "transition", {}) or {}
+    transition_occurred = bool(transition.get("occurred"))
+    transition_cooldown = max(0, int(getattr(state, "transition_cooldown", 0)))
+    confidence_template = apply_confidence(
+        {"score": 1.0},
+        confidence,
+        transition=transition_occurred,
+        cooldown=transition_cooldown,
+    )
+    effective_confidence = confidence_template.get("confidence", confidence)
 
-    if confidence >= 0.7:
+    if effective_confidence >= 0.7:
         structure = max(
             structural_engine.population,
             key=lambda s: s.get("memory", {}).get("avg_perf", 0.0)
@@ -54,7 +63,7 @@ def decide(state):
         n_actions = allocator.allocate(
             name,
             total_budget,
-            confidence=confidence,
+            confidence=effective_confidence,
             exploration_boost=confidence_template.get("exploration_boost", 0.0),
         )
         proposals = strat.propose(state)[:n_actions]
@@ -78,7 +87,7 @@ def decide(state):
             campaign_score = campaign_learning.score(campaign_id)
             budget_score = campaign_budget_allocator.get_budget(campaign_id)
 
-            bandit_w = bandit_weight((name, campaign_id), state.graph, confidence=confidence)
+            bandit_w = bandit_weight((name, campaign_id), state.graph, confidence=effective_confidence)
 
             weights = structure["weights"]
 
@@ -100,7 +109,14 @@ def decide(state):
                 "campaign_id": campaign_id,
                 "structure": structure
             }
-            decisions.append(apply_confidence(decision_row, confidence))
+            decisions.append(
+                apply_confidence(
+                    decision_row,
+                    confidence,
+                    transition=transition_occurred,
+                    cooldown=transition_cooldown,
+                )
+            )
 
     decisions.sort(key=lambda x:x["score"],reverse=True)
 

@@ -31,24 +31,36 @@ class ConfidenceEngine:
 confidence_engine = ConfidenceEngine()
 
 
-def apply_confidence(decision: dict, confidence: float):
+def apply_confidence(decision: dict, confidence: float, transition: bool = False, cooldown: int = 0):
     """Modify decision score and exploration based on confidence"""
+    effective_confidence = confidence * 0.85 if transition else confidence
 
     # scale score
-    decision["score"] *= confidence
+    decision["score"] *= effective_confidence
 
     # attach confidence for logging
-    decision["confidence"] = confidence
+    decision["confidence"] = effective_confidence
 
     # adaptive behavior
-    if confidence < 0.4:
+    if effective_confidence < 0.4:
         decision["exploration_boost"] = 0.3
         decision["scale_down"] = True
-    elif confidence < 0.7:
+    elif effective_confidence < 0.7:
         decision["exploration_boost"] = 0.1
         decision["scale_down"] = False
     else:
         decision["exploration_boost"] = 0.0
         decision["scale_down"] = False
+
+    if transition:
+        decision["exploration_boost"] *= 1.3
+    if cooldown > 0:
+        decision["exploration_boost"] *= 1.1
+
+    decision["exploration_boost"] = min(1.0, decision["exploration_boost"])
+    decision["transition_adjustment"] = {
+        "occurred": transition,
+        "cooldown": max(0, cooldown),
+    }
 
     return decision
