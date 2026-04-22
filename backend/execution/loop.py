@@ -141,7 +141,7 @@ def run_cycle(state):
     state = learn(state, results)
     state.graph = update_causal(state.graph, state.event_log)
 
-    previous_regime = getattr(state, "detected_regime", None)
+    previous_regime = state.detected_regime
     state.detected_regime = detector.detect(state.event_log)
     transition_detected = detect_transition(previous_regime, state.detected_regime)
     state.previous_regime = previous_regime

@@ -57,6 +57,7 @@ def apply_confidence(decision: dict, confidence: float, transition: bool = False
         decision["exploration_boost"] = 0.0
         decision["scale_down"] = False
 
+    # Intentionally compound these multipliers: immediate transition shock plus short cooldown persistence.
     if transition:
         decision["exploration_boost"] *= TRANSITION_EXPLORATION_MULTIPLIER
     if cooldown > 0:
