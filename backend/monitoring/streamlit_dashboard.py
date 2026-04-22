@@ -22,7 +22,10 @@ def load_data():
             except json.JSONDecodeError:
                 continue
 
-    return pd.DataFrame(data)
+    try:
+        return pd.DataFrame(data)
+    except (TypeError, ValueError):
+        return pd.DataFrame()
 
 
 df = load_data()
