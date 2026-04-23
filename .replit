@@ -1,5 +1,5 @@
 modules = ["python-3.12"]
-run = "bash -lc 'python -m pip install -r requirements.txt && python -m uvicorn api.main:app --host 0.0.0.0 --port 3000'"
+run = "bash -lc 'python -m pip install -r requirements.txt && python -m uvicorn backend.api:app --host 0.0.0.0 --port 3000'"
 
 [[ports]]
 localPort = 3000

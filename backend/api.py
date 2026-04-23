@@ -325,3 +325,14 @@ def memory():
         {k: round(v, 4) if isinstance(v, float) else v for k, v in r.items()}
         for r in recent
     ]
+
+
+# ── UPOS compatibility routes (optional — imported only when present) ──────────
+
+try:
+    from api.control import router as _control_router
+    from api.dashboard import router as _dashboard_router
+    app.include_router(_control_router, prefix="/control")
+    app.include_router(_dashboard_router, prefix="/dashboard")
+except ImportError:
+    pass
