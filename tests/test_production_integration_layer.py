@@ -1,7 +1,7 @@
 import pytest
 from fastapi import HTTPException
 
-from api.control import STATE, approve, override_budget, pause, resume
+from api.control import approve, get_control_snapshot, override_budget, pause, reset_control_state, resume
 from agents.human_gate import can_launch
 from backend.core.state import SystemState
 from backend.execution.loop import run_cycle
@@ -43,8 +43,7 @@ def test_bridge_execute_dispatches_real_cycles(monkeypatch):
 
 
 def test_control_gate_and_anomaly_rules():
-    STATE["approved_products"].clear()
-    STATE["paused_products"].clear()
+    reset_control_state()
 
     product_id = "p-1"
 
@@ -53,9 +52,9 @@ def test_control_gate_and_anomaly_rules():
     assert can_launch(product_id) is True
 
     pause(product_id)
-    assert product_id in STATE["paused_products"]
+    assert product_id in get_control_snapshot()["paused_products"]
     resume(product_id)
-    assert product_id not in STATE["paused_products"]
+    assert product_id not in get_control_snapshot()["paused_products"]
 
     alerts = detect({"product_name": "x", "roas": 0.6, "spend": 60})
     assert "ROAS_DROP" in alerts
