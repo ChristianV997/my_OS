@@ -1,3 +1,4 @@
+import logging
 import time
 
 from core.loop import run_cycle
@@ -15,6 +16,7 @@ def run_forever(interval_seconds=DEFAULT_CYCLE_INTERVAL_SECONDS, signal_provider
             run_cycle(signal_provider())
             time.sleep(interval_seconds)
     except KeyboardInterrupt:
+        logging.getLogger(__name__).info("Scheduler stopped by keyboard interrupt")
         return
 
 

@@ -1,5 +1,8 @@
 def execute(decision):
-    action = (decision or {}).get("action")
+    if not isinstance(decision, dict):
+        raise TypeError("decision must be a dict")
+
+    action = decision.get("action")
 
     if action == "launch":
         return "product launched"

@@ -2,6 +2,7 @@ from agents.execution_agent import execute
 from core.cac import estimate_cac
 from core.memory import store_event
 
+# Launch offers only when estimated CAC is below 20 cost-units per conversion.
 CAC_LAUNCH_THRESHOLD = 20
 
 
