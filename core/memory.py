@@ -1,9 +1,14 @@
+from threading import Lock
+
 memory = []
+_memory_lock = Lock()
 
 
 def store_event(event):
-    memory.append(event)
+    with _memory_lock:
+        memory.append(event)
 
 
 def clear_memory():
-    memory.clear()
+    with _memory_lock:
+        memory.clear()
