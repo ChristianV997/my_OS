@@ -3,7 +3,7 @@ from core.loop import run_cycle
 from core.memory import clear_memory, get_memory
 
 
-def setup_function():
+def setup_function(_function):
     clear_memory()
 
 

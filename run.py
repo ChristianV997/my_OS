@@ -21,4 +21,5 @@ def run_forever(interval_seconds=DEFAULT_CYCLE_INTERVAL_SECONDS, signal_provider
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
     run_forever()
