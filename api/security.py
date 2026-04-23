@@ -52,7 +52,12 @@ def require_execution_auth(
 def enforce_rate_limit(request: Request) -> None:
     limit = max(1, int(os.getenv("UPOS_RATE_LIMIT_REQUESTS", "60")))
     window_sec = max(1, int(os.getenv("UPOS_RATE_LIMIT_WINDOW_SEC", "60")))
-    client = request.client.host if request.client else "unknown"
+    client = request.client.host if request.client else ""
+    trust_proxy = os.getenv("UPOS_TRUST_PROXY_HEADERS", "0") == "1"
+    if not client and trust_proxy:
+        client = (request.headers.get("x-forwarded-for") or "").split(",")[0].strip()
+    if not client:
+        raise HTTPException(status_code=400, detail="client_identification_required")
     key = f"{client}:{request.url.path}"
     now = time.monotonic()
     threshold = now - window_sec

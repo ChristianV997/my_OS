@@ -10,9 +10,9 @@ def _safe_json_value(value: Any) -> Any:
         return str(value)
 
 
-def serialize_task_launch(task_name: str, launched: Any) -> dict[str, Any]:
-    task_id = getattr(launched, "id", None) or getattr(launched, "task_id", None)
-    task_state = getattr(launched, "state", None)
+def serialize_task_launch(task_name: str, task_result: Any) -> dict[str, Any]:
+    task_id = getattr(task_result, "id", None) or getattr(task_result, "task_id", None)
+    task_state = getattr(task_result, "state", None)
     if task_id:
         payload = {
             "status": "queued",
@@ -27,5 +27,5 @@ def serialize_task_launch(task_name: str, launched: Any) -> dict[str, Any]:
     return {
         "status": "completed",
         "task": {"name": task_name},
-        "result": _safe_json_value(launched),
+        "result": _safe_json_value(task_result),
     }

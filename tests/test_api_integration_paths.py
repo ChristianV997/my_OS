@@ -38,7 +38,8 @@ def test_queue_endpoints_return_serializable_payloads(monkeypatch):
 
     class IntelligenceTaskStub:
         @staticmethod
-        def delay(_keywords):
+        def delay(keywords):
+            assert keywords == ["x"]
             return 2
 
     monkeypatch.setattr("api.main.run_discovery", DiscoveryTaskStub())

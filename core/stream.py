@@ -14,6 +14,7 @@ STREAM_READ_COUNT = int(os.getenv("UPOS_STREAM_READ_COUNT", "10"))
 STREAM_READ_BLOCK_MS = int(os.getenv("UPOS_STREAM_READ_BLOCK_MS", "1000"))
 STREAM_CONSUME_RETRIES = max(int(os.getenv("UPOS_STREAM_CONSUME_RETRIES", "3")), 1)
 STREAM_CONSUME_BACKOFF_MS = max(int(os.getenv("UPOS_STREAM_CONSUME_BACKOFF_MS", "200")), 0)
+STREAM_CONSUME_MAX_BACKOFF_MS = max(int(os.getenv("UPOS_STREAM_CONSUME_MAX_BACKOFF_MS", "2000")), 0)
 STREAM_LOCAL_MAX_QUEUE = max(int(os.getenv("UPOS_STREAM_LOCAL_MAX_QUEUE", "1000")), 1)
 
 _r = None
@@ -67,7 +68,9 @@ def consume(group="workers", consumer="c1"):
             except Exception:
                 if attempt == STREAM_CONSUME_RETRIES - 1:
                     return []
-                time.sleep((STREAM_CONSUME_BACKOFF_MS / 1000.0) * (2 ** attempt))
+                exponent = min(attempt, 10)
+                sleep_ms = min(STREAM_CONSUME_BACKOFF_MS * (2 ** exponent), STREAM_CONSUME_MAX_BACKOFF_MS)
+                time.sleep(sleep_ms / 1000.0)
 
     with _QUEUE_LOCK:
         if not _queue:

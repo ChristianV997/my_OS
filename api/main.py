@@ -2,6 +2,7 @@ import logging
 import os
 import time
 import uuid
+from datetime import datetime, timezone
 
 import duckdb
 from fastapi import Depends, FastAPI, Request, WebSocket
@@ -36,7 +37,7 @@ def _check_db_dependency() -> dict:
         con.close()
         return {"ok": True, "path": path}
     except Exception as exc:
-        return {"ok": False, "path": path, "error": str(exc)}
+        return {"ok": False, "path": path, "error_category": type(exc).__name__}
 
 
 def _error_category(status_code: int) -> str:
@@ -57,13 +58,14 @@ async def request_context_middleware(request: Request, call_next):
         response = await call_next(request)
     except Exception:
         elapsed_ms = round((time.perf_counter() - started) * 1000, 2)
-        logger.exception(
+        logger.error(
             "request_failed",
             extra={
                 "request_id": request_id,
                 "path": request.url.path,
                 "method": request.method,
                 "category": "server_error",
+                "error_type": "internal_error",
                 "duration_ms": elapsed_ms,
             },
         )
@@ -91,7 +93,11 @@ async def request_context_middleware(request: Request, call_next):
 
 @app.get("/status")
 def status():
-    return {"service": "upos", "status": "ok", "timestamp": time.time()}
+    return {
+        "service": "upos",
+        "status": "ok",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
 
 
 @app.get("/health")

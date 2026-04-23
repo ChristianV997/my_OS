@@ -19,9 +19,9 @@ def _normalize(raw: dict[str, Any] | None) -> dict[str, Any]:
     approved = raw.get("approved_products", [])
     budgets = raw.get("manual_budgets", {})
     return {
-        "paused_products": set(str(item) for item in paused),
-        "approved_products": set(str(item) for item in approved),
-        "manual_budgets": {str(k): float(v) for k, v in dict(budgets).items()},
+        "paused_products": {item for item in paused if isinstance(item, str)},
+        "approved_products": {item for item in approved if isinstance(item, str)},
+        "manual_budgets": {k: float(v) for k, v in dict(budgets).items() if isinstance(k, str)},
     }
 
 

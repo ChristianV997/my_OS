@@ -43,6 +43,7 @@ async def event_stream(ws: WebSocket):
 
         empty_polls = 0
         sent = 0
+        hit_backpressure_cap = False
         for _, messages in events:
             for _, payload in messages:
                 data = payload.get("data")
@@ -52,6 +53,7 @@ async def event_stream(ws: WebSocket):
                 sent += 1
                 if sent >= WS_MAX_MESSAGES_PER_TICK:
                     await asyncio.sleep(WS_BACKPRESSURE_PAUSE_SECONDS)
+                    hit_backpressure_cap = True
                     break
-            if sent >= WS_MAX_MESSAGES_PER_TICK:
+            if hit_backpressure_cap:
                 break
