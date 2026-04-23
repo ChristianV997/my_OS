@@ -1,5 +1,11 @@
 import math
 
+TRANSITION_CONFIDENCE_DAMPING = 0.85
+TRANSITION_EXPLORATION_MULTIPLIER = 1.3
+TRANSITION_COOLDOWN_EXPLORATION_MULTIPLIER = 1.1
+MIN_TRANSITION_EXPLORATION_BOOST = 0.05
+
+
 class ConfidenceEngine:
     def __init__(self):
         self.last_confidence = 1.0
@@ -31,24 +37,39 @@ class ConfidenceEngine:
 confidence_engine = ConfidenceEngine()
 
 
-def apply_confidence(decision: dict, confidence: float):
+def apply_confidence(decision: dict, confidence: float, transition: bool = False, cooldown: int = 0):
     """Modify decision score and exploration based on confidence"""
+    effective_confidence = confidence * TRANSITION_CONFIDENCE_DAMPING if transition else confidence
 
     # scale score
-    decision["score"] *= confidence
+    decision["score"] *= effective_confidence
 
     # attach confidence for logging
-    decision["confidence"] = confidence
+    decision["confidence"] = effective_confidence
 
     # adaptive behavior
-    if confidence < 0.4:
+    if effective_confidence < 0.4:
         decision["exploration_boost"] = 0.3
         decision["scale_down"] = True
-    elif confidence < 0.7:
+    elif effective_confidence < 0.7:
         decision["exploration_boost"] = 0.1
         decision["scale_down"] = False
     else:
         decision["exploration_boost"] = 0.0
         decision["scale_down"] = False
+
+    # Intentionally compound these multipliers: immediate transition shock plus short cooldown persistence.
+    if transition:
+        if decision["exploration_boost"] == 0.0:
+            decision["exploration_boost"] = MIN_TRANSITION_EXPLORATION_BOOST
+        decision["exploration_boost"] *= TRANSITION_EXPLORATION_MULTIPLIER
+    if cooldown > 0:
+        decision["exploration_boost"] *= TRANSITION_COOLDOWN_EXPLORATION_MULTIPLIER
+
+    decision["exploration_boost"] = min(1.0, decision["exploration_boost"])
+    decision["transition_adjustment"] = {
+        "occurred": transition,
+        "cooldown": max(0, cooldown),
+    }
 
     return decision

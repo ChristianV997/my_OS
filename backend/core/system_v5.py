@@ -4,7 +4,7 @@ import os
 from backend.agents.genome_strategies import create_initial_strategies
 from backend.agents.allocator import allocator
 from backend.agents.evolution import evolution_engine
-from backend.core.state import SystemState
+from backend.core.state import SystemState, ensure_state_shape
 from backend.learning.campaign_learning import campaign_learning
 from backend.learning.calibration import calibration_model
 
@@ -67,6 +67,7 @@ class SystemV5:
         self.state.load()
 
     def run_cycle(self, env, decision_engine):
+        self.state = ensure_state_shape(self.state)
 
         self.state.step += 1
 

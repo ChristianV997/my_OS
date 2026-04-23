@@ -1,0 +1,86 @@
+name: Strict CI
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 0 * * *'
+
+permissions:
+  contents: read
+
+jobs:
+  strict:
+    runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest
+      - name: Strict assertions
+        run: |
+          python - << 'PY'
+          import copy
+          import random
+          from backend.core.state import SystemState
+          from backend.execution.loop import run_cycle
+          from backend.causal.graph import CausalGraph
+          from backend.learning.bandit_update import bandit_memory, bandit_weight
+          from backend.ci.regression_guard import compute_metrics
+          from backend.ci.meta_performance import load_meta, step as meta_step
+          from backend.agents.structural_evolution import structural_engine
+          from agents.world_model import world_model
+
+          random.seed(13)
+          state = SystemState()
+          for _ in range(35):
+              state = run_cycle(state)
+
+          world_model.train(state.event_log)
+          p1 = world_model.predict({"variant": 1, "intensity": 1.0})["roas_6h"]
+          p2 = world_model.predict({"variant": 2, "intensity": 1.0})["roas_6h"]
+          assert p1 != p2, "world model predictions should vary by variant"
+
+          graph = CausalGraph()
+          graph.add_edge("strategy_a", "roas", 0.2)
+          bandit_memory.update(("strategy_a", "campaign_a"), 1.4)
+          bandit_memory.update(("strategy_a", "campaign_a"), 1.2)
+          bandit_memory.update(("strategy_b", "campaign_b"), 0.5)
+          w_a = bandit_weight(("strategy_a", "campaign_a"), graph, confidence=0.8)
+          w_b = bandit_weight(("strategy_b", "campaign_b"), graph, confidence=0.8)
+          assert w_a != w_b, "bandit weights diverge"
+
+          before_ids = {s["id"] for s in structural_engine.population}
+          structural_engine.max_archive_size = 20
+          for i in range(35):
+              structural_engine.score(
+                  structural_engine.population[i % len(structural_engine.population)],
+                  1.0 + (i * 0.01),
+              )
+          assert len(structural_engine.archive) > 0, "archive grows"
+          assert len(structural_engine.archive) <= structural_engine.max_archive_size, "archive prunes"
+
+          initial_novelty = structural_engine.novelty_weight
+          structural_engine.population = [copy.deepcopy(structural_engine.population[0])]
+          structural_engine.evolve()
+          after_ids = {s["id"] for s in structural_engine.population}
+          assert len(after_ids - before_ids) > 0, "strategies mutate"
+          assert structural_engine.novelty_weight != initial_novelty, "novelty weight adapts"
+
+          metrics = compute_metrics(state.event_log.rows[-50:])
+          meta, status = meta_step(load_meta(), "volatile", metrics, evolution_engine=structural_engine)
+          assert "improvement_rate" in status, "meta improvement rate present"
+          for key in ("avg_roas", "prediction_error"):
+              assert key in metrics, f"{key} regression guard metric present"
+
+          print("STRICT_OK", metrics, status, len(meta.get("regimes", {})))
+          PY
+      - name: Strict targeted tests
+        run: |
+          python -m pytest tests/test_structural_evolution_ci.py tests/test_system.py -v
