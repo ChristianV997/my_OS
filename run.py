@@ -10,9 +10,12 @@ def default_signal_provider():
 
 
 def run_forever(interval_seconds=DEFAULT_CYCLE_INTERVAL_SECONDS, signal_provider=default_signal_provider):
-    while True:
-        run_cycle(signal_provider())
-        time.sleep(interval_seconds)
+    try:
+        while True:
+            run_cycle(signal_provider())
+            time.sleep(interval_seconds)
+    except KeyboardInterrupt:
+        return
 
 
 if __name__ == "__main__":
