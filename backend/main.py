@@ -1,12 +1,13 @@
-from backend.core.state import SystemState
-from backend.execution.loop import run_cycle
-
-
-def main():
-    state = SystemState()
-    while True:
-        state = run_cycle(state)
+import os
+import uvicorn
+from backend.api import app  # noqa: F401 — re-exported for uvicorn
 
 
 if __name__ == "__main__":
-    main()
+    uvicorn.run(
+        "backend.api:app",
+        host="0.0.0.0",
+        port=int(os.getenv("PORT", 8000)),
+        log_level="info",
+        reload=False,
+    )
