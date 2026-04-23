@@ -3,6 +3,7 @@ scikit-learn
 statsmodels
 fastapi
 uvicorn
+streamlit
 pytest
 httpx
 requests
