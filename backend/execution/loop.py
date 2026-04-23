@@ -11,6 +11,8 @@ from backend.learning.calibration_log import calibration_log
 from backend.causal.update import update_causal
 from backend.regime.detector import detector
 from backend.regime.confidence import regime_confidence
+from backend.core.regime_transition import detect_transition
+from backend.core.state import ensure_state_shape
 from backend.agents.structural_evolution import structural_engine
 from backend.agents.self_healing import self_healing_engine
 from backend.simulation.reality_gap import reality_gap_engine
@@ -26,6 +28,7 @@ _hp_meta_state = hp_meta.load_hp_meta()
 _prev_avg_roas: float | None = None
 
 TOTAL_CYCLE_BUDGET = 500.0  # total spend per cycle, split across all decisions
+TRANSITION_COOLDOWN_CYCLES = 5
 
 
 def _simulate_environment():
@@ -56,8 +59,7 @@ def _population_diversity():
     pop = structural_engine.population
     if len(pop) < 2:
         return 1.0
-    dists = [structure_distance(pop[i], pop[j])
-             for i in range(len(pop)) for j in range(i + 1, len(pop))]
+    dists = [structure_distance(pop[i], pop[j]) for i in range(len(pop)) for j in range(i + 1, len(pop))]
     return sum(dists) / len(dists)
 
 
@@ -84,24 +86,24 @@ def execute(decisions, state):
         calibration_model.update(pred, roas)
 
         outcome = {
-            "roas":         round(roas, 4),
-            "roas_6h":      round(max(0.01, roas * random.uniform(0.70, 0.95)), 4),
-            "roas_12h":     round(max(0.01, roas * random.uniform(0.85, 1.05)), 4),
-            "roas_24h":     round(max(0.01, roas * random.uniform(0.90, 1.10)), 4),
-            "revenue":      round(revenue, 2),
-            "cost":         cost,
-            "profit":       profit,
-            "ctr":          round(ctr, 4),
-            "cvr":          round(cvr, 4),
-            "cac":          round(cac, 4),
-            "prediction":   round(pred, 4),
-            "error":        round(pred - roas, 4),
-            "pred_lo":      d.get("pred_lo"),
-            "pred_hi":      d.get("pred_hi"),
-            "pred_width":   d.get("pred_width"),
+            "roas": round(roas, 4),
+            "roas_6h": round(max(0.01, roas * random.uniform(0.70, 0.95)), 4),
+            "roas_12h": round(max(0.01, roas * random.uniform(0.85, 1.05)), 4),
+            "roas_24h": round(max(0.01, roas * random.uniform(0.90, 1.10)), 4),
+            "revenue": round(revenue, 2),
+            "cost": cost,
+            "profit": profit,
+            "ctr": round(ctr, 4),
+            "cvr": round(cvr, 4),
+            "cac": round(cac, 4),
+            "prediction": round(pred, 4),
+            "error": round(pred - roas, 4),
+            "pred_lo": d.get("pred_lo"),
+            "pred_hi": d.get("pred_hi"),
+            "pred_width": d.get("pred_width"),
             "interval_conf": d.get("interval_conf"),
-            "env_regime":   ENV["regime"],
-            "env_trend":    round(ENV["trend"], 4),
+            "env_regime": ENV["regime"],
+            "env_trend": round(ENV["trend"], 4),
         }
         outcome.update(action)
 
@@ -126,6 +128,8 @@ def process_delayed():
 
 
 def run_cycle(state):
+    state = ensure_state_shape(state)
+
     # initialize structural population on first cycle
     if not structural_engine.population:
         structural_engine.initialize(n=5)
@@ -137,7 +141,28 @@ def run_cycle(state):
     state = learn(state, results)
     state.graph = update_causal(state.graph, state.event_log)
 
+    previous_regime = state.detected_regime
     state.detected_regime = detector.detect(state.event_log)
+    transition_detected = detect_transition(previous_regime, state.detected_regime)
+    state.previous_regime = previous_regime
+    state.transition = {
+        "occurred": transition_detected,
+        "from": previous_regime,
+        "to": state.detected_regime,
+    }
+
+    cooldown = max(0, state.transition_cooldown)
+    if transition_detected:
+        cooldown = TRANSITION_COOLDOWN_CYCLES
+    elif cooldown > 0:
+        cooldown -= 1
+    state.transition_cooldown = cooldown
+
+    if results:
+        for row in results:
+            row["transition"] = state.transition
+            row["transition_cooldown"] = cooldown
+
     regime_confidence.update(state.detected_regime, ENV["regime"])
     calibration_log.log(calibration_model.stats())
 
@@ -148,7 +173,7 @@ def run_cycle(state):
         global _hp_meta_state, _prev_avg_roas
 
         structural_engine.evolve()
-        avg_roas = (sum(r.get("roas", 0) for r in results) / max(len(results), 1))
+        avg_roas = sum(r.get("roas", 0) for r in results) / max(len(results), 1)
         diversity = _population_diversity()
         self_healing_engine.heal(avg_roas, diversity, structural_engine)
 

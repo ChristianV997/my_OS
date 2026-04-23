@@ -22,6 +22,7 @@ STRUCTURE_SPACE = {
 DIVERSITY_THRESHOLD = 0.15
 SIMILARITY_PENALTY = 0.3
 NOVELTY_WEIGHT = 0.4
+MAX_ARCHIVE_SIZE = 500
 
 
 def _new_id():
@@ -92,10 +93,58 @@ class StructuralEvolution:
         self.scores = defaultdict(list)
         self.lineage_scores = defaultdict(list)
         self.global_knowledge = None
+        self.novelty_weight = NOVELTY_WEIGHT
+        self.max_archive_size = MAX_ARCHIVE_SIZE
+        self._distance_cache = {}
+        self._signature_cache = {}
         self.diversity_history: list[float] = []  # mean pairwise distance per evolve()
 
     def initialize(self, n=5):
         self.population = [random_structure() for _ in range(n)]
+        self._distance_cache.clear()
+        self._signature_cache.clear()
+
+    def _distance(self, a, b):
+        aid = a.get("id") or self._structure_signature(a)
+        bid = b.get("id") or self._structure_signature(b)
+        key = (aid, bid) if repr(aid) <= repr(bid) else (bid, aid)
+        if key not in self._distance_cache:
+            self._distance_cache[key] = structure_distance(a, b)
+        return self._distance_cache[key]
+
+    def _novelty_score(self, structure):
+        if not self.archive:
+            return 1.0
+        return sum(self._distance(structure, s) for s in self.archive) / len(self.archive)
+
+    def _structure_signature(self, structure):
+        sid = structure.get("id")
+        if sid and sid in self._signature_cache:
+            return self._signature_cache[sid]
+        rounded_weights = tuple(sorted((k, round(v, 3)) for k, v in structure.get("weights", {}).items()))
+        features = tuple(sorted(structure.get("features", {}).items()))
+        signature = (rounded_weights, features, structure.get("planning_depth", 1))
+        if sid:
+            self._signature_cache[sid] = signature
+        return signature
+
+    def _prune_archive(self):
+        overflow = len(self.archive) - self.max_archive_size
+        if overflow > 0:
+            self.archive = self.archive[overflow:]
+            self._distance_cache.clear()
+
+    def _adapt_novelty_weight(self):
+        if len(self.population) < 2:
+            self.novelty_weight = min(0.9, self.novelty_weight + 0.05)
+            return
+
+        signatures = {self._structure_signature(s) for s in self.population}
+        diversity = len(signatures) / len(self.population)
+        if diversity < 0.4:
+            self.novelty_weight = min(0.9, self.novelty_weight + 0.05)
+        elif diversity > 0.7:
+            self.novelty_weight = max(0.1, self.novelty_weight - 0.02)
 
     def population_diversity(self) -> float:
         """Mean pairwise structure_distance across the current population."""
@@ -114,7 +163,15 @@ class StructuralEvolution:
         pid = structure.get("parent_id")
 
         self.scores[sid].append(performance)
-        self.archive.append(structure)
+        self.archive.append(
+            {
+                "id": structure.get("id"),
+                "weights": dict(structure.get("weights", {})),
+                "features": dict(structure.get("features", {})),
+                "planning_depth": structure.get("planning_depth", 1),
+            }
+        )
+        self._prune_archive()
 
         mem = structure.setdefault("memory", {"avg_perf": 0.0, "count": 0})
         mem["count"] += 1
@@ -136,7 +193,7 @@ class StructuralEvolution:
         for other in self.population:
             if other["id"] == structure["id"]:
                 continue
-            sim = 1 - structure_distance(structure, other)
+            sim = 1 - self._distance(structure, other)
             if sim > (1 - DIVERSITY_THRESHOLD):
                 penalties.append(sim)
         return sum(penalties) * SIMILARITY_PENALTY
@@ -146,10 +203,10 @@ class StructuralEvolution:
         for s in self.population:
             sid = s.get("id")
             perf = self.avg_score(sid) + 0.5 * self.lineage_score(sid)
-            novelty = novelty_score(s, self.archive)
+            novelty = self._novelty_score(s)
             penalty = self.diversity_penalty(s)
 
-            score = perf + NOVELTY_WEIGHT * novelty - penalty
+            score = perf + self.novelty_weight * novelty - penalty
             ranked.append((s, score))
 
         ranked.sort(key=lambda x: x[1], reverse=True)
@@ -181,8 +238,16 @@ class StructuralEvolution:
         return diverse
 
     def evolve(self):
+        if not self.population:
+            self.initialize()
+        if not self.population:
+            return
+
         self.distill_global_knowledge()
         best = self.select_best()
+        if not best:
+            self.initialize()
+            best = self.select_best()
         new_pop = []
 
         for b in best:
@@ -190,7 +255,23 @@ class StructuralEvolution:
             for _ in range(3):
                 new_pop.append(mutate_structure(b, self.global_knowledge))
 
-        self.population = self.enforce_diversity(new_pop)[:10]
+        diverse = self.enforce_diversity(new_pop)[:10]
+        if not diverse:
+            diverse = [random_structure() for _ in range(5)]
+
+        signatures = {self._structure_signature(s) for s in diverse}
+        seed = diverse[0]
+        while len(signatures) < 2 and len(diverse) < 10:
+            candidate = mutate_structure(seed, self.global_knowledge, intensity=0.3)
+            sig = self._structure_signature(candidate)
+            if sig not in signatures:
+                diverse.append(candidate)
+                signatures.add(sig)
+
+        self.population = diverse
+        self._adapt_novelty_weight()
+        self._distance_cache.clear()
+        self._signature_cache.clear()
         self.diversity_history.append(self.population_diversity())
 
 
