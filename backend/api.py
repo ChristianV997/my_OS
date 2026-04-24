@@ -336,3 +336,52 @@ try:
     app.include_router(_dashboard_router, prefix="/dashboard")
 except ImportError:
     pass
+
+
+# ── Phase 2 connector endpoints ───────────────────────────────────────────────
+
+@app.get("/macro")
+def macro():
+    """Latest FRED macro signals (falls back to static stubs when key absent)."""
+    from connectors.macro_signals import get_macro_signals
+    try:
+        return get_macro_signals()
+    except Exception:
+        return {"error": "macro signals unavailable"}
+
+
+@app.get("/portfolio")
+def portfolio():
+    """ROAS-weighted portfolio allocation across active product variants."""
+    from backend.decision.portfolio_engine import top_products
+    return top_products(n=10)
+
+
+@app.get("/replay_buffer")
+def replay_buffer_stats():
+    """Replay buffer size and readiness."""
+    from backend.learning.replay_buffer import replay_buffer as _rb
+    return {
+        "size": len(_rb),
+        "capacity": _rb.capacity,
+        "ready": _rb.is_ready(),
+    }
+
+
+@app.get("/bandit")
+def bandit_status():
+    """LinUCB contextual bandit arm registry (arm names only)."""
+    from backend.learning.contextual_bandit import bandit_instance
+    b = bandit_instance()
+    return {"arms": b.arms, "alpha": b.alpha}
+
+
+@app.post("/ajo/apply")
+def ajo_apply(campaign_id: str, action: str, budget_multiplier: float = 1.5):
+    """Apply a MarketOS action (pause/scale/hold) to an Adobe AJO campaign."""
+    from connectors.adobe_ajo_connector import apply_decision
+    try:
+        return apply_decision(campaign_id, action, budget_multiplier)
+    except Exception:
+        return {"error": "AJO action failed", "campaign_id": campaign_id}
+

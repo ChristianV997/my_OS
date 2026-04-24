@@ -3,11 +3,14 @@ import random
 
 from backend.decision.engine import decide
 from backend.decision.budget_allocator import allocate as budget_allocate, allocation_summary
+from backend.decision.portfolio_engine import ingest_results as portfolio_ingest
 from backend.learning.delayed_rewards import DelayedRewardStore
 from backend.learning.bandit_update import update_from_delayed
 from backend.learning.update import learn
 from backend.learning.calibration import calibration_model
 from backend.learning.calibration_log import calibration_log
+from backend.learning.contextual_bandit import select_arm, record_reward
+from backend.learning.replay_buffer import replay_buffer
 from backend.causal.update import update_causal
 from backend.regime.detector import detector
 from backend.regime.confidence import regime_confidence
@@ -17,11 +20,16 @@ from backend.agents.structural_evolution import structural_engine
 from backend.agents.self_healing import self_healing_engine
 from backend.simulation.reality_gap import reality_gap_engine
 import backend.ci.hyperparam_meta as hp_meta
+from connectors.macro_signals import get_macro_signals
 
 store = DelayedRewardStore()
 
 # Stochastic market environment — regime-driven trend with noise
 ENV = {"trend": 0.0, "regime": "stable"}
+
+# Cached macro context refreshed every N cycles to avoid excessive API calls
+_macro_cache: dict = {}
+_MACRO_REFRESH_CYCLES = 10
 
 # Hyperparameter meta-learning state (persisted to JSON file)
 _hp_meta_state = hp_meta.load_hp_meta()
@@ -29,6 +37,9 @@ _prev_avg_roas: float | None = None
 
 TOTAL_CYCLE_BUDGET = 500.0  # total spend per cycle, split across all decisions
 TRANSITION_COOLDOWN_CYCLES = 5
+# Scales the macro-risk adjustment to trend; 0.02 keeps macro nudge small
+# relative to the ±0.1 volatile step, preventing macro from dominating.
+_MACRO_TREND_COEFFICIENT = 0.02
 
 
 def _simulate_environment():
@@ -42,6 +53,9 @@ def _simulate_environment():
         ENV["trend"] += random.uniform(-0.1, 0.1)
     elif ENV["regime"] == "stable":
         ENV["trend"] *= 0.95
+    # Macro risk nudges the trend: high risk → downward pressure
+    macro_risk = _macro_cache.get("macro_risk_score", 0.5)
+    ENV["trend"] -= (macro_risk - 0.5) * _MACRO_TREND_COEFFICIENT
     ENV["trend"] = max(-1.0, min(1.0, ENV["trend"]))
 
 
@@ -128,18 +142,49 @@ def process_delayed():
 
 
 def run_cycle(state):
+    global _macro_cache
+
     state = ensure_state_shape(state)
 
     # initialize structural population on first cycle
     if not structural_engine.population:
         structural_engine.initialize(n=5)
 
+    # refresh macro signals periodically (no-op when FRED key absent)
+    if state.total_cycles % _MACRO_REFRESH_CYCLES == 0:
+        try:
+            _macro_cache = get_macro_signals()
+        except Exception:
+            pass
+
+    # select high-level arm from LinUCB contextual bandit
+    bandit_arm = select_arm(state)
+
     decisions = decide(state)
     results = execute(decisions, state)
     state.event_log.log_batch(results)
 
+    # feed results into portfolio engine for ROAS-weighted allocation
+    portfolio_ingest(results)
+
     state = learn(state, results)
     state.graph = update_causal(state.graph, state.event_log)
+
+    # update LinUCB bandit reward using mean ROAS this cycle
+    avg_roas_cycle = sum(r.get("roas", 0) for r in results) / max(len(results), 1)
+    record_reward(bandit_arm, state, avg_roas_cycle)
+
+    # push experiences into the replay buffer
+    for r in results:
+        action = r.get("action", {})
+        features = [
+            float(r.get("roas", 0)),
+            float(r.get("cost", 0)),
+            float(r.get("ctr", 0)),
+            float(r.get("cvr", 0)),
+            float(_macro_cache.get("macro_risk_score", 0.5)),
+        ]
+        replay_buffer.add(features, action, r.get("roas", 0.0))
 
     previous_regime = state.detected_regime
     state.detected_regime = detector.detect(state.event_log)
@@ -189,6 +234,20 @@ def run_cycle(state):
             evolution_engine=structural_engine,
         )
         hp_meta.save_hp_meta(_hp_meta_state)
+
+    # persist cycle summary to Supabase (no-op when credentials absent)
+    try:
+        from connectors.supabase_connector import save_cycle_summary
+        save_cycle_summary({
+            "total_cycles": state.total_cycles,
+            "capital": round(state.capital, 2),
+            "detected_regime": state.detected_regime,
+            "avg_roas": round(avg_roas_cycle, 4),
+            "macro_risk": _macro_cache.get("macro_risk_score"),
+            "bandit_arm": bandit_arm,
+        })
+    except Exception:
+        pass
 
     state.total_cycles += 1
     return state
