@@ -11,6 +11,7 @@ from backend.learning.calibration import calibration_model
 from backend.learning.calibration_log import calibration_log
 from backend.learning.contextual_bandit import select_arm, record_reward
 from backend.learning.replay_buffer import replay_buffer
+from backend.learning.world_model_calibration import world_model_calibrator
 from backend.causal.update import update_causal
 from backend.regime.detector import detector
 from backend.regime.confidence import regime_confidence
@@ -18,6 +19,7 @@ from backend.core.regime_transition import detect_transition
 from backend.core.state import ensure_state_shape
 from backend.agents.structural_evolution import structural_engine
 from backend.agents.self_healing import self_healing_engine
+from backend.agents.agent_metrics import agent_metrics_registry
 from backend.simulation.reality_gap import reality_gap_engine
 import backend.ci.hyperparam_meta as hp_meta
 from connectors.macro_signals import get_macro_signals
@@ -81,14 +83,21 @@ def execute(decisions, state):
     budgets = budget_allocate(decisions, total_budget=TOTAL_CYCLE_BUDGET)
     logging.getLogger(__name__).debug(allocation_summary(decisions, budgets))
 
+    # Track peak capital for drawdown monitoring (stored on state object)
+    peak_capital = getattr(state, "_peak_capital", state.capital)
+    if state.capital > peak_capital:
+        peak_capital = state.capital
+    state._peak_capital = peak_capital
+
     results = []
     for i, d in enumerate(decisions):
         action = d.get("action", {})
         structure = d.get("structure")
-        roas = _generate_roas()
         cost = round(budgets[i], 4)
+
+        roas = _generate_roas()
         revenue = roas * cost
-        clicks = max(1, int(cost * 2))
+        clicks = max(1, int(cost * 2)) if cost > 0 else 1
         impressions = max(clicks, int(clicks / 0.02))
         conversions = max(1, int(clicks * random.uniform(0.02, 0.15)))
         ctr = clicks / impressions
@@ -98,6 +107,11 @@ def execute(decisions, state):
 
         pred = d.get("pred", 1.0)
         calibration_model.update(pred, roas)
+        # Bayesian world model calibration
+        world_model_calibrator.update(pred, roas)
+
+        # Record agent-level metrics
+        agent_metrics_registry.record_pnl("execution", revenue, cost)
 
         outcome = {
             "roas": round(roas, 4),

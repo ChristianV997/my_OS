@@ -1,0 +1,287 @@
+"""Agent Hierarchy — Scaling, Geo, Audience, and Risk agents.
+
+Each agent follows the same interface::
+
+    agent.decide(input_data: dict) -> AgentDecision
+
+where ``AgentDecision`` carries the proposed action and the agent's
+internal reasoning metadata.
+
+The RiskAgent has *priority override*: its decision supersedes all others.
+"""
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import Any
+
+
+# ---------------------------------------------------------------------------
+# Common decision dataclass
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class AgentDecision:
+    """Output produced by any agent in the hierarchy."""
+    agent: str
+    action: str          # "scale" | "hold" | "pause" | "kill" | "expand" | "test" | "retarget"
+    confidence: float    # 0–1
+    reason: str
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
+# ---------------------------------------------------------------------------
+# Scaling Agent
+# ---------------------------------------------------------------------------
+
+
+class ScalingAgent:
+    """Decides whether to scale a campaign budget up, hold, or kill it.
+
+    Decision logic is ROAS-threshold-based and feeds into the risk layer.
+    """
+
+    def __init__(
+        self,
+        scale_roas: float = 1.8,
+        kill_roas: float = 0.8,
+        max_scale_factor: float = 1.5,
+    ):
+        self.scale_roas = scale_roas
+        self.kill_roas = kill_roas
+        self.max_scale_factor = max_scale_factor
+
+    def decide(self, input_data: dict[str, Any]) -> AgentDecision:
+        """
+        Parameters
+        ----------
+        input_data:
+            Must contain ``roas`` (float) and ``current_budget`` (float).
+            Optional: ``spend``, ``clicks``.
+        """
+        roas = float(input_data.get("roas", 0.0))
+        budget = float(input_data.get("current_budget", 0.0))
+
+        if roas >= self.scale_roas:
+            new_budget = round(min(budget * self.max_scale_factor, budget * 1.6), 2)
+            confidence = min(1.0, roas / (self.scale_roas * 2))
+            return AgentDecision(
+                agent="scaling",
+                action="scale",
+                confidence=round(confidence, 4),
+                reason=f"roas={roas} >= scale_threshold={self.scale_roas}",
+                metadata={"new_budget": new_budget, "roas": roas},
+            )
+
+        if roas < self.kill_roas:
+            return AgentDecision(
+                agent="scaling",
+                action="kill",
+                confidence=0.95,
+                reason=f"roas={roas} < kill_threshold={self.kill_roas}",
+                metadata={"new_budget": 0.0, "roas": roas},
+            )
+
+        return AgentDecision(
+            agent="scaling",
+            action="hold",
+            confidence=0.7,
+            reason=f"roas={roas} in learning band [{self.kill_roas}, {self.scale_roas})",
+            metadata={"new_budget": budget, "roas": roas},
+        )
+
+
+# ---------------------------------------------------------------------------
+# Geo Agent
+# ---------------------------------------------------------------------------
+
+
+class GeoAgent:
+    """Decides geo-expansion or contraction based on per-country ROAS."""
+
+    def __init__(
+        self,
+        expand_roas: float = 2.0,
+        pause_roas: float = 0.9,
+    ):
+        self.expand_roas = expand_roas
+        self.pause_roas = pause_roas
+
+    def decide(self, input_data: dict[str, Any]) -> AgentDecision:
+        """
+        Parameters
+        ----------
+        input_data:
+            Must contain ``country`` (str) and ``roas`` (float).
+            Optional: ``spend``.
+        """
+        country = str(input_data.get("country", "unknown"))
+        roas = float(input_data.get("roas", 0.0))
+
+        if roas >= self.expand_roas:
+            return AgentDecision(
+                agent="geo",
+                action="expand",
+                confidence=min(1.0, roas / (self.expand_roas * 1.5)),
+                reason=f"{country}: roas={roas} >= expand_threshold={self.expand_roas}",
+                metadata={"country": country, "roas": roas},
+            )
+
+        if roas < self.pause_roas:
+            return AgentDecision(
+                agent="geo",
+                action="pause",
+                confidence=0.9,
+                reason=f"{country}: roas={roas} < pause_threshold={self.pause_roas}",
+                metadata={"country": country, "roas": roas},
+            )
+
+        return AgentDecision(
+            agent="geo",
+            action="test",
+            confidence=0.6,
+            reason=f"{country}: roas={roas} in test band",
+            metadata={"country": country, "roas": roas},
+        )
+
+
+# ---------------------------------------------------------------------------
+# Audience Agent
+# ---------------------------------------------------------------------------
+
+
+class AudienceAgent:
+    """Decides audience retargeting or expansion based on CTR / CVR signals."""
+
+    def __init__(
+        self,
+        min_ctr: float = 0.01,
+        min_cvr: float = 0.01,
+    ):
+        self.min_ctr = min_ctr
+        self.min_cvr = min_cvr
+
+    def decide(self, input_data: dict[str, Any]) -> AgentDecision:
+        """
+        Parameters
+        ----------
+        input_data:
+            Optional ``ctr`` (float), ``cvr`` (float), ``audience_size`` (int).
+        """
+        ctr = float(input_data.get("ctr", 0.0))
+        cvr = float(input_data.get("cvr", 0.0))
+        audience_size = int(input_data.get("audience_size", 0))
+
+        if ctr >= self.min_ctr and cvr >= self.min_cvr:
+            action = "expand" if audience_size < 100_000 else "hold"
+            return AgentDecision(
+                agent="audience",
+                action=action,
+                confidence=min(1.0, (ctr / self.min_ctr + cvr / self.min_cvr) / 2),
+                reason=f"ctr={ctr}, cvr={cvr} above thresholds; audience_size={audience_size}",
+                metadata={"ctr": ctr, "cvr": cvr, "audience_size": audience_size},
+            )
+
+        return AgentDecision(
+            agent="audience",
+            action="retarget",
+            confidence=0.65,
+            reason=f"ctr={ctr} or cvr={cvr} below thresholds — switch to retargeting",
+            metadata={"ctr": ctr, "cvr": cvr},
+        )
+
+
+# ---------------------------------------------------------------------------
+# Risk Agent  (priority override)
+# ---------------------------------------------------------------------------
+
+
+class RiskAgent:
+    """Risk Agent with *priority override* over all other agents.
+
+    When the RiskAgent issues a ``kill`` or ``pause`` decision the calling
+    code *must* respect it regardless of what other agents returned.
+    """
+
+    def __init__(
+        self,
+        max_drawdown: float = 0.30,
+        max_daily_spend: float = 10_000.0,
+        kill_roas: float = 0.5,
+    ):
+        self.max_drawdown = max_drawdown
+        self.max_daily_spend = max_daily_spend
+        self.kill_roas = kill_roas
+
+    def decide(self, input_data: dict[str, Any]) -> AgentDecision:
+        """
+        Parameters
+        ----------
+        input_data:
+            Optional:
+                ``current_capital`` (float),
+                ``peak_capital`` (float),
+                ``today_spend`` (float),
+                ``roas`` (float),
+                ``kill_switch`` (bool).
+        """
+        capital = float(input_data.get("current_capital", 1.0))
+        peak = float(input_data.get("peak_capital", capital))
+        today_spend = float(input_data.get("today_spend", 0.0))
+        roas = float(input_data.get("roas", 1.0))
+        kill_switch = bool(input_data.get("kill_switch", False))
+
+        # Hard kill-switch
+        if kill_switch:
+            return AgentDecision(
+                agent="risk",
+                action="kill",
+                confidence=1.0,
+                reason="kill_switch_activated",
+                metadata={"override": True},
+            )
+
+        # Drawdown check
+        if peak > 0:
+            drawdown = (peak - capital) / peak
+            if drawdown > self.max_drawdown:
+                return AgentDecision(
+                    agent="risk",
+                    action="kill",
+                    confidence=1.0,
+                    reason=f"drawdown={drawdown:.2%} > max_drawdown={self.max_drawdown:.2%}",
+                    metadata={"override": True, "drawdown": drawdown},
+                )
+
+        # Daily spend cap
+        if today_spend >= self.max_daily_spend:
+            return AgentDecision(
+                agent="risk",
+                action="pause",
+                confidence=1.0,
+                reason=f"daily_spend={today_spend:.2f} >= cap={self.max_daily_spend:.2f}",
+                metadata={"override": True, "today_spend": today_spend},
+            )
+
+        # ROAS emergency floor
+        if roas < self.kill_roas:
+            return AgentDecision(
+                agent="risk",
+                action="kill",
+                confidence=0.9,
+                reason=f"roas={roas} < emergency_floor={self.kill_roas}",
+                metadata={"override": True, "roas": roas},
+            )
+
+        return AgentDecision(
+            agent="risk",
+            action="hold",
+            confidence=0.5,
+            reason="no_risk_condition_triggered",
+            metadata={"override": False},
+        )
+
+    @staticmethod
+    def is_override(decision: AgentDecision) -> bool:
+        """Return True if this risk decision should override all other agents."""
+        return decision.action in {"kill", "pause"} and decision.metadata.get("override", False)

@@ -783,3 +783,119 @@ def alerts():
         "alerts": base_alerts,
     }
 
+
+# ── Step 52: Production Hardening + Agent Hierarchy ───────────────────────────
+
+# Module-level singletons for Step 52 features
+from core.risk.global_risk_engine import global_risk_engine as _global_risk_engine
+from backend.agents.agent_metrics import agent_metrics_registry as _agent_metrics
+from backend.learning.world_model_calibration import world_model_calibrator as _wm_calibrator
+from agents.hierarchy import ScalingAgent, GeoAgent, AudienceAgent, RiskAgent
+from backend.execution.loop import TOTAL_CYCLE_BUDGET
+
+_scaling_agent = ScalingAgent()
+_geo_agent = GeoAgent()
+_audience_agent = AudienceAgent()
+_risk_agent = RiskAgent()
+
+# Peak capital tracker (for drawdown calculation in the global risk engine)
+_peak_capital: float = _state.capital
+
+
+@app.get("/agents")
+def agent_performance():
+    """Agent performance panel: decisions, PnL, and drift detection per agent."""
+    rows = _state.event_log.rows
+    recent = rows[-_RECENT_ROWS_WINDOW:] if rows else []
+
+    # Run agents against the latest window to record live decisions
+    if recent:
+        avg_roas = sum(r.get("roas", 0) for r in recent) / len(recent)
+        avg_ctr = sum(r.get("ctr", 0) for r in recent) / len(recent)
+        avg_cvr = sum(r.get("cvr", 0) for r in recent) / len(recent)
+
+        scaling_dec = _scaling_agent.decide({"roas": avg_roas, "current_budget": TOTAL_CYCLE_BUDGET})
+        geo_dec = _geo_agent.decide({"country": "system", "roas": avg_roas})
+        audience_dec = _audience_agent.decide({"ctr": avg_ctr, "cvr": avg_cvr})
+        risk_input = {
+            "current_capital": _state.capital,
+            "peak_capital": _peak_capital,
+            "today_spend": _global_risk_engine.today_spend(),
+            "roas": avg_roas,
+            "kill_switch": _global_risk_engine.kill_switch_active,
+        }
+        risk_dec = _risk_agent.decide(risk_input)
+
+        for dec in [scaling_dec, geo_dec, audience_dec, risk_dec]:
+            _agent_metrics.record_decision(dec.agent, dec.action)
+
+    return {
+        "agents": _agent_metrics.snapshot(),
+        "risk_status": _global_risk_engine.status(),
+    }
+
+
+@app.get("/risk/status")
+def risk_engine_status():
+    """Global risk engine status: kill-switch, daily spend, drawdown caps."""
+    return _global_risk_engine.status()
+
+
+@app.post("/risk/killswitch/activate")
+def activate_kill_switch(reason: str = "manual"):
+    """Activate the global kill-switch — halts all new spend immediately."""
+    _global_risk_engine.activate_kill_switch(reason=reason)
+    return {"kill_switch_active": True, "reason": reason}
+
+
+@app.post("/risk/killswitch/deactivate")
+def deactivate_kill_switch():
+    """Deactivate the global kill-switch — resumes normal operation."""
+    _global_risk_engine.deactivate_kill_switch()
+    return {"kill_switch_active": False}
+
+
+@app.get("/capital_allocation")
+def capital_allocation():
+    """Capital allocation view: portfolio split and risk-adjusted budgets."""
+    top = decide(_state)[:5]
+    budgets = budget_allocate(top)
+
+    total = sum(budgets) or 1.0
+    result = []
+    for i, d in enumerate(top):
+        raw_budget = budgets[i]
+        # enforce through global risk engine
+        override = _global_risk_engine.enforce(
+            proposed_budget=raw_budget,
+            current_capital=_state.capital,
+            peak_capital=_peak_capital,
+        )
+        safe_budget = override.adjusted_budget if override.allowed else 0.0
+        result.append({
+            "variant": d["action"].get("variant"),
+            "raw_budget": round(raw_budget, 2),
+            "safe_budget": round(safe_budget, 2),
+            "allocation_pct": round(raw_budget / total * 100, 2),
+            "risk_override": not override.allowed or override.triggered_cap != "",
+            "risk_reason": override.reason,
+            "pred": round(d.get("pred", 0), 4),
+        })
+
+    return {
+        "total_budget": round(total, 2),
+        "risk_status": _global_risk_engine.status(),
+        "allocations": result,
+    }
+
+
+@app.get("/prediction_errors")
+def prediction_errors(limit: int = Query(default=100, ge=1, le=500)):
+    """Prediction error chart: recent (predicted, actual, error) pairs with calibration stats."""
+    errors = _wm_calibrator.prediction_errors()[-limit:]
+    stats = _wm_calibrator.stats()
+    return {
+        "errors": errors,
+        "calibration": stats,
+        "total_updates": _wm_calibrator.total_updates,
+    }
