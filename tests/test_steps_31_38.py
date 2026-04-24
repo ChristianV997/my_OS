@@ -350,6 +350,11 @@ class TestUGCSelector:
         selected = select_clips(clips, k=5)
         assert len(selected) == 1
 
+    def test_select_empty_list(self):
+        from core.ugc.selector import select_clips
+        selected = select_clips([], k=3)
+        assert selected == []
+
 
 class TestHybridEditor:
     def test_timeline_structure(self):
