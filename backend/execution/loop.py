@@ -11,11 +11,18 @@ from backend.learning.calibration_log import calibration_log
 from backend.causal.update import update_causal
 from backend.regime.detector import detector
 from backend.regime.confidence import regime_confidence
+from backend.regime.meta_strategy import strategy_memory
 from backend.agents.structural_evolution import structural_engine
 from backend.agents.self_healing import self_healing_engine
 from backend.simulation.reality_gap import reality_gap_engine
+from agents.auto_kill import should_kill
+from agents.amplifier import Amplifier
+from backend.integrations.shopify_client import get_orders, compute_metrics
+from backend.integrations.meta_ads_client import get_ad_spend
 import backend.ci.hyperparam_meta as hp_meta
 
+_log = logging.getLogger(__name__)
+_amplifier = Amplifier()
 store = DelayedRewardStore()
 
 # Stochastic market environment — regime-driven trend with noise
@@ -26,6 +33,13 @@ _hp_meta_state = hp_meta.load_hp_meta()
 _prev_avg_roas: float | None = None
 
 TOTAL_CYCLE_BUDGET = 500.0  # total spend per cycle, split across all decisions
+
+# Campaigns flagged for kill (module-level; cleared on restart)
+_kill_set: set[str] = set()
+
+# Real-data state for reality gap calibration
+_real_roas_cache: float | None = None
+_real_data_counter: int = 0
 
 
 def _simulate_environment():
@@ -51,7 +65,6 @@ def _generate_roas():
 
 
 def _population_diversity():
-    """Mean pairwise distance across structural population."""
     from backend.agents.structural_evolution import structure_distance
     pop = structural_engine.population
     if len(pop) < 2:
@@ -61,16 +74,41 @@ def _population_diversity():
     return sum(dists) / len(dists)
 
 
+def _refresh_real_roas():
+    """Fetch real ROAS from Shopify/Meta every 10 calls; returns cached value."""
+    global _real_roas_cache, _real_data_counter
+    _real_data_counter += 1
+    if _real_data_counter % 10 != 0:
+        return _real_roas_cache
+    try:
+        orders = get_orders(last_n_minutes=60)
+        meta = get_ad_spend(last_n_minutes=60)
+        metrics = compute_metrics(orders)
+        spend = meta.get("total_spend", 0.0)
+        if spend > 0:
+            _real_roas_cache = round(metrics["revenue"] / spend, 4)
+    except Exception:
+        pass  # keep cached value; clients already have their own fallback
+    return _real_roas_cache
+
+
 def execute(decisions, state):
     budgets = budget_allocate(decisions, total_budget=TOTAL_CYCLE_BUDGET)
-    logging.getLogger(__name__).debug(allocation_summary(decisions, budgets))
+    _log.debug(allocation_summary(decisions, budgets))
 
     results = []
     for i, d in enumerate(decisions):
         action = d.get("action", {})
         structure = d.get("structure")
+        campaign_id = str(action.get("campaign_id", ""))
+
+        # killed campaigns get minimum spend so they don't skew budget
+        if campaign_id and campaign_id in _kill_set:
+            cost = 5.0
+        else:
+            cost = round(budgets[i], 4)
+
         roas = _generate_roas()
-        cost = round(budgets[i], 4)
         revenue = roas * cost
         clicks = max(1, int(cost * 2))
         impressions = max(clicks, int(clicks / 0.02))
@@ -84,24 +122,24 @@ def execute(decisions, state):
         calibration_model.update(pred, roas)
 
         outcome = {
-            "roas":         round(roas, 4),
-            "roas_6h":      round(max(0.01, roas * random.uniform(0.70, 0.95)), 4),
-            "roas_12h":     round(max(0.01, roas * random.uniform(0.85, 1.05)), 4),
-            "roas_24h":     round(max(0.01, roas * random.uniform(0.90, 1.10)), 4),
-            "revenue":      round(revenue, 2),
-            "cost":         cost,
-            "profit":       profit,
-            "ctr":          round(ctr, 4),
-            "cvr":          round(cvr, 4),
-            "cac":          round(cac, 4),
-            "prediction":   round(pred, 4),
-            "error":        round(pred - roas, 4),
-            "pred_lo":      d.get("pred_lo"),
-            "pred_hi":      d.get("pred_hi"),
-            "pred_width":   d.get("pred_width"),
+            "roas":          round(roas, 4),
+            "roas_6h":       round(max(0.01, roas * random.uniform(0.70, 0.95)), 4),
+            "roas_12h":      round(max(0.01, roas * random.uniform(0.85, 1.05)), 4),
+            "roas_24h":      round(max(0.01, roas * random.uniform(0.90, 1.10)), 4),
+            "revenue":       round(revenue, 2),
+            "cost":          cost,
+            "profit":        profit,
+            "ctr":           round(ctr, 4),
+            "cvr":           round(cvr, 4),
+            "cac":           round(cac, 4),
+            "prediction":    round(pred, 4),
+            "error":         round(pred - roas, 4),
+            "pred_lo":       d.get("pred_lo"),
+            "pred_hi":       d.get("pred_hi"),
+            "pred_width":    d.get("pred_width"),
             "interval_conf": d.get("interval_conf"),
-            "env_regime":   ENV["regime"],
-            "env_trend":    round(ENV["trend"], 4),
+            "env_regime":    ENV["regime"],
+            "env_trend":     round(ENV["trend"], 4),
         }
         outcome.update(action)
 
@@ -109,8 +147,17 @@ def execute(decisions, state):
         if structure:
             structural_engine.score(structure, roas)
 
-        # track reality gap (real_roas=None until external data arrives)
-        reality_gap_engine.update(roas, None)
+        # regime performance feedback
+        strategy_memory.update(ENV["regime"], roas)
+
+        # reality gap — feed real ROAS when Shopify/Meta credentials present
+        reality_gap_engine.update(roas, _refresh_real_roas())
+
+        # campaign lifecycle: flag kills for next cycle
+        kill_signal = should_kill(outcome)
+        outcome["kill_signal"] = kill_signal
+        if kill_signal and campaign_id:
+            _kill_set.add(campaign_id)
 
         store.log(action, outcome)
         state.capital += revenue - cost
@@ -126,16 +173,28 @@ def process_delayed():
 
 
 def run_cycle(state):
-    # initialize structural population on first cycle
     if not structural_engine.population:
         structural_engine.initialize(n=5)
 
-    decisions = decide(state)
-    results = execute(decisions, state)
+    try:
+        decisions = decide(state)
+        results = execute(decisions, state)
+    except Exception:
+        _log.exception("cycle execute failed")
+        state.total_cycles += 1
+        return state
+
     state.event_log.log_batch(results)
 
-    state = learn(state, results)
-    state.graph = update_causal(state.graph, state.event_log)
+    try:
+        state = learn(state, results)
+    except Exception:
+        _log.exception("cycle learn failed")
+
+    try:
+        state.graph = update_causal(state.graph, state.event_log)
+    except Exception:
+        _log.exception("cycle causal failed")
 
     state.detected_regime = detector.detect(state.event_log)
     regime_confidence.update(state.detected_regime, ENV["regime"])
@@ -143,27 +202,36 @@ def run_cycle(state):
 
     process_delayed()
 
+    # amplify winners from this cycle (stored in memory for next decide())
+    try:
+        winners = [r for r in results if r.get("roas", 0) > 1.5 and not r.get("kill_signal")]
+        amplified = _amplifier.amplify(winners)
+        if amplified:
+            state.memory.extend(amplified[-5:])
+    except Exception:
+        _log.exception("cycle amplify failed")
+
     # structural evolution + hyperparam meta-learning every 10 cycles
     if state.total_cycles % 10 == 0 and state.total_cycles > 0:
         global _hp_meta_state, _prev_avg_roas
+        try:
+            structural_engine.evolve()
+            avg_roas = (sum(r.get("roas", 0) for r in results) / max(len(results), 1))
+            diversity = _population_diversity()
+            self_healing_engine.heal(avg_roas, diversity, structural_engine)
 
-        structural_engine.evolve()
-        avg_roas = (sum(r.get("roas", 0) for r in results) / max(len(results), 1))
-        diversity = _population_diversity()
-        self_healing_engine.heal(avg_roas, diversity, structural_engine)
+            improvement = (avg_roas - _prev_avg_roas) if _prev_avg_roas is not None else 0.0
+            _prev_avg_roas = avg_roas
 
-        # compute improvement vs. previous 10-cycle window
-        improvement = (avg_roas - _prev_avg_roas) if _prev_avg_roas is not None else 0.0
-        _prev_avg_roas = avg_roas
-
-        # update hyperparameter meta-learning and apply best params
-        _hp_meta_state = hp_meta.step(
-            _hp_meta_state,
-            regime=state.detected_regime,
-            improvement=improvement,
-            evolution_engine=structural_engine,
-        )
-        hp_meta.save_hp_meta(_hp_meta_state)
+            _hp_meta_state = hp_meta.step(
+                _hp_meta_state,
+                regime=state.detected_regime,
+                improvement=improvement,
+                evolution_engine=structural_engine,
+            )
+            hp_meta.save_hp_meta(_hp_meta_state)
+        except Exception:
+            _log.exception("cycle evolution failed")
 
     state.total_cycles += 1
     return state

@@ -9,6 +9,7 @@ Environment variables (set in Replit Secrets):
   CYCLES_PER_MINUTE  Background runner speed (default 10 → one cycle / 6 s)
 """
 import json
+import logging
 import os
 import threading
 import time
@@ -55,18 +56,40 @@ _last_cycle_at: float | None = None
 
 # ── background runner ─────────────────────────────────────────────────────────
 
+_api_log = logging.getLogger(__name__)
+
+
 def _background_runner():
     global _state, _last_cycle_at
     sleep_s = 60.0 / _CYCLES_PER_MINUTE
     while _bg_running:
-        new_state = run_cycle(_state)   # compute outside lock
-        with _lock:
-            _state = new_state
-            _last_cycle_at = time.time()
+        try:
+            new_state = run_cycle(_state)   # compute outside lock
+            with _lock:
+                _state = new_state
+                _last_cycle_at = time.time()
+        except Exception:
+            _api_log.exception("background runner cycle error")
         time.sleep(sleep_s)
 
 
 # ── lifecycle ─────────────────────────────────────────────────────────────────
+
+def _research_runner():
+    from backend.jobs.runner import JobRegistry
+    from backend.jobs.scheduler import IngestionScheduler
+    from backend.jobs.research_trend_v1 import register_research_trend_v1_job, register_research_prune_job
+    registry = JobRegistry()
+    register_research_trend_v1_job(registry)
+    register_research_prune_job(registry)
+    scheduler = IngestionScheduler(registry)
+    while _bg_running:
+        try:
+            scheduler.tick()
+        except Exception:
+            _api_log.exception("research runner error")
+        time.sleep(300)  # check every 5 minutes
+
 
 @app.on_event("startup")
 async def _startup():
@@ -78,6 +101,7 @@ async def _startup():
 
     _bg_running = True
     threading.Thread(target=_background_runner, daemon=True).start()
+    threading.Thread(target=_research_runner, daemon=True).start()
 
 
 @app.on_event("shutdown")

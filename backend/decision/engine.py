@@ -5,6 +5,7 @@ from backend.decision.confidence import confidence_engine
 from backend.learning.signals import roas_velocity, roas_acceleration
 from backend.learning.bandit_update import bandit_weight
 from backend.learning.calibration import calibration_model
+from backend.regime.meta_strategy import strategy_memory
 from backend.simulation.reality_gap import reality_gap_engine
 from backend.core.state import ensure_state_shape
 from agents.world_model import world_model
@@ -49,13 +50,14 @@ def decide(state):
         c_score = causal_score(action, state.graph)
         velocity_bonus = vel + acc
         bandit_w = bandit_weight(action, state.graph)
+        regime_bonus = strategy_memory.score(state.detected_regime)
 
         # three-factor confidence: calibration × interval narrowness × system health
         calib_conf = calibration_model.confidence_weight()
         interval_conf = _interval_confidence(preds)
         confidence = calib_conf * interval_conf * system_conf
 
-        score = (corrected_pred + c_score + velocity_bonus + bandit_w) * confidence
+        score = (corrected_pred + c_score + velocity_bonus + bandit_w + regime_bonus) * confidence
 
         decisions.append({
             "action":        action,
