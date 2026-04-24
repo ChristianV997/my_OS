@@ -36,7 +36,21 @@ class Pod:
 class PodManager:
     """Manages the lifecycle of all Pods."""
 
+    def __init__(self, max_concurrent_pods: int = 10) -> None:
+        self.max_concurrent_pods = max_concurrent_pods
+
+    def active_count(self) -> int:
+        """Return the number of non-killed pods."""
+        with _pods_lock:
+            return sum(1 for p in _pods.values() if p.status != "killed")
+
     def create(self, product: str, market: str, platform: str, budget: float = 0.0) -> Pod:
+        with _pods_lock:
+            active = sum(1 for p in _pods.values() if p.status != "killed")
+            if active >= self.max_concurrent_pods:
+                raise RuntimeError(
+                    f"Cannot create pod: max_concurrent_pods ({self.max_concurrent_pods}) reached"
+                )
         pod = Pod(product, market, platform, budget)
         with _pods_lock:
             _pods[pod.id] = pod

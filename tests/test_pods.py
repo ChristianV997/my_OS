@@ -81,3 +81,32 @@ def test_pod_manager_get_returns_none(fresh_manager):
 
 def test_valid_statuses():
     assert VALID_STATUSES == {"testing", "scaling", "killed"}
+
+
+def test_pod_manager_max_concurrent_pods():
+    mgr = PodManager(max_concurrent_pods=2)
+    mgr.create("a", "US", "meta")
+    mgr.create("b", "EU", "tiktok")
+    with pytest.raises(RuntimeError, match="max_concurrent_pods"):
+        mgr.create("c", "US", "meta")
+    mgr.clear()
+
+
+def test_pod_manager_active_count():
+    mgr = PodManager()
+    mgr.create("a", "US", "meta")
+    p2 = mgr.create("b", "EU", "tiktok")
+    assert mgr.active_count() == 2
+    mgr.kill(p2.id)
+    assert mgr.active_count() == 1
+    mgr.clear()
+
+
+def test_pod_manager_killed_pod_frees_slot():
+    mgr = PodManager(max_concurrent_pods=1)
+    p1 = mgr.create("a", "US", "meta")
+    mgr.kill(p1.id)
+    # After killing, a new pod should fit within the limit
+    p2 = mgr.create("b", "EU", "tiktok")
+    assert p2.product == "b"
+    mgr.clear()
