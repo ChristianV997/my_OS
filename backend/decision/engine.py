@@ -1,7 +1,7 @@
 import random
 
 from backend.decision.scoring import causal_score
-from backend.decision.confidence import confidence_engine
+from backend.decision.confidence import confidence_engine, apply_confidence
 from backend.learning.signals import roas_velocity, roas_acceleration
 from backend.learning.bandit_update import bandit_weight
 from backend.learning.calibration import calibration_model
@@ -33,6 +33,10 @@ def decide(state):
         calibration_error=cal_stats.get("bias"),
     )
 
+    transition = state.transition or {}
+    transition_occurred = bool(transition.get("occurred"))
+    transition_cooldown = max(0, state.transition_cooldown)
+
     decisions = []
 
     for _ in range(5):
@@ -57,18 +61,24 @@ def decide(state):
         interval_conf = _interval_confidence(preds)
         confidence = calib_conf * interval_conf * system_conf
 
-        score = (corrected_pred + c_score + velocity_bonus + bandit_w + regime_bonus) * confidence
-
-        decisions.append({
+        decision_row = {
             "action":        action,
-            "score":         score,
+            "score":         corrected_pred + c_score + velocity_bonus + bandit_w + regime_bonus,
             "pred":          corrected_pred,
             "pred_lo":       round(0.5 * preds["lo_6h"] + 0.3 * preds["lo_12h"] + 0.2 * preds["lo_24h"], 4),
             "pred_hi":       round(0.5 * preds["hi_6h"] + 0.3 * preds["hi_12h"] + 0.2 * preds["hi_24h"], 4),
             "pred_width":    round(0.5 * preds["width_6h"] + 0.3 * preds["width_12h"] + 0.2 * preds["width_24h"], 4),
             "interval_conf": round(interval_conf, 4),
             "system_conf":   round(system_conf, 4),
-        })
+        }
+        decisions.append(
+            apply_confidence(
+                decision_row,
+                confidence,
+                transition=transition_occurred,
+                cooldown=transition_cooldown,
+            )
+        )
 
     decisions.sort(key=lambda x: x["score"], reverse=True)
     return decisions

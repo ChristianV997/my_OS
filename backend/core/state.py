@@ -21,6 +21,9 @@ class SystemState:
         self.last_reality_gap = None
         self.last_confidence = 1.0
         self.last_heal_actions = []
+        self.previous_regime = None
+        self.transition = {"occurred": False, "from": None, "to": None}
+        self.transition_cooldown = 0
 
 
 def ensure_state_shape(state):
@@ -55,5 +58,11 @@ def ensure_state_shape(state):
         state.last_confidence = 1.0
     if not hasattr(state, "last_heal_actions") or state.last_heal_actions is None:
         state.last_heal_actions = []
+    if not hasattr(state, "previous_regime"):
+        state.previous_regime = None
+    if not hasattr(state, "transition") or state.transition is None:
+        state.transition = {"occurred": False, "from": None, "to": None}
+    if not hasattr(state, "transition_cooldown"):
+        state.transition_cooldown = 0
 
     return state

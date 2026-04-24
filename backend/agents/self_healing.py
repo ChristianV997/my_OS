@@ -1,4 +1,5 @@
 import random
+from backend.agents.structural_evolution import mutate_structure
 
 STALL_THRESHOLD = 5
 DIVERSITY_THRESHOLD = 0.1
@@ -36,10 +37,16 @@ class SelfHealingEngine:
         structural_engine.population = new_population
 
     def reset_partial_population(self, structural_engine):
-        from backend.agents.structural_evolution import random_structure
         half = len(structural_engine.population) // 2
+        if half == 0:
+            return
         for i in range(half):
-            structural_engine.population[i] = random_structure()
+            base = random.choice(structural_engine.population)
+            structural_engine.population[i] = mutate_structure(
+                base,
+                structural_engine.global_knowledge,
+                intensity=0.4,
+            )
 
     def exploration_spike(self, structural_engine):
         # NOVELTY_WEIGHT is a module constant; track override on the engine instance
