@@ -95,7 +95,7 @@ def _macro_risk(signals: dict) -> float:
     cpi = signals.get("cpi_yoy", _FALLBACK["cpi_yoy"])
     sentiment = signals.get("consumer_sentiment", _FALLBACK["consumer_sentiment"])
 
-    # Normalise each driver to [0, 1]
+    # Normalize each driver to [0, 1]
     vix_norm = min(1.0, max(0.0, (vix - 10.0) / 50.0))         # 10=calm, 60=extreme fear
     cpi_norm = min(1.0, max(0.0, (cpi - 2.0) / 8.0))           # 2%=target, 10%=crisis
     sent_norm = min(1.0, max(0.0, (100.0 - sentiment) / 70.0))  # 100=high, 30=panic

@@ -8,7 +8,7 @@ loop continues uninterrupted in offline / CI environments.
 
 Environment variables:
   ADOBE_AJO_TOKEN   Bearer token for AJO REST API
-  ADOBE_IMS_ORG     IMS Organisation ID (x-gw-ims-org-id header)
+  ADOBE_IMS_ORG     IMS Organization ID (x-gw-ims-org-id header)
 """
 import os
 
