@@ -3,6 +3,9 @@ from __future__ import annotations
 
 from typing import Any
 
+ENGAGEMENT_WEIGHT: float = 0.6
+VIEWS_WEIGHT: float = 1e-6
+
 
 def engagement_rate(signal: dict[str, Any]) -> float:
     """Compute (likes + comments) / views, or 0 when views is zero."""
@@ -30,4 +33,4 @@ def score(signal: dict[str, Any]) -> float:
         Composite score (higher is better).
     """
     views = int(signal.get("views", 0))
-    return engagement_rate(signal) * 0.6 + views * 1e-6
+    return engagement_rate(signal) * ENGAGEMENT_WEIGHT + views * VIEWS_WEIGHT

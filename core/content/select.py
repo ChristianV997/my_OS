@@ -5,8 +5,8 @@ from typing import Any
 
 from core.content.scoring import score as _score
 
-_PROMOTE_MIN_VIEWS = 50_000
-_PROMOTE_MIN_ENGAGEMENT = 0.05
+_PROMOTE_MIN_VIEWS = 50_000     # threshold: organic video must reach 50k views before paid promotion
+_PROMOTE_MIN_ENGAGEMENT = 0.05  # threshold: 5% engagement rate indicates strong audience resonance
 
 
 def select_winners(posts: list[dict[str, Any]], top_n: int = 2) -> list[dict[str, Any]]:

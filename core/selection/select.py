@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Any
 
-_MIN_ROAS = 1.8
+_MIN_ROAS = 1.8  # Minimum predicted ROAS to justify ad spend (ensures ~80% profit margin after costs)
 
 
 def select_best(candidates: list[dict[str, Any]]) -> dict[str, Any] | None:

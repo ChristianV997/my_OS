@@ -15,7 +15,8 @@ def embed_state(state: dict[str, Any], domain: str = "default") -> list[float]:
     state:
         Campaign / system state dict.
     domain:
-        Domain label (currently reserved for future domain-conditioning).
+        Domain label.  Currently unused — reserved for future domain-conditioning
+        (e.g. weighting features differently per platform such as TikTok vs Meta).
 
     Returns
     -------

@@ -32,6 +32,10 @@ def _ensure_dir(path: Path) -> Path:
     return path
 
 
+_JSON_BLOCK_START = "```json\n"
+_JSON_BLOCK_START_LEN = len(_JSON_BLOCK_START)
+
+
 def export_to_obsidian(
     data: dict[str, Any],
     category: str = "raw",
@@ -92,10 +96,10 @@ def import_from_obsidian(
     for md_file in sorted(folder.glob("*.md")):
         text = md_file.read_text(encoding="utf-8")
         # extract first JSON code-block
-        start = text.find("```json\n")
-        end = text.find("\n```", start + 7)
+        start = text.find(_JSON_BLOCK_START)
+        end = text.find("\n```", start + _JSON_BLOCK_START_LEN)
         if start != -1 and end != -1:
-            raw = text[start + 7: end]
+            raw = text[start + _JSON_BLOCK_START_LEN: end]
             try:
                 results.append(json.loads(raw))
             except json.JSONDecodeError:

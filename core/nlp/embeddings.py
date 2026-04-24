@@ -4,6 +4,7 @@ from __future__ import annotations
 from typing import Any
 
 _MODEL_NAME = "all-MiniLM-L6-v2"
+_FALLBACK_EMBEDDING_DIM: int = 64
 _model = None
 
 
@@ -43,8 +44,8 @@ def embed(texts: list[str]) -> list[list[float]]:
         except Exception:
             pass
 
-    # Deterministic fallback: hash each text into a 64-dim float vector
-    def _hash_embed(text: str, dim: int = 64) -> list[float]:
+    # Deterministic fallback: hash each text into a fixed-dim float vector
+    def _hash_embed(text: str, dim: int = _FALLBACK_EMBEDDING_DIM) -> list[float]:
         vec = [0.0] * dim
         for i, ch in enumerate(text):
             vec[ord(ch) % dim] += 1.0 / (i + 1)

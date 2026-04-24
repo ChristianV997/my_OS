@@ -3,11 +3,13 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.content.scoring import _post_score
+
 
 def score(post: dict[str, Any]) -> float:
     """Compute a hook-level performance score.
 
-    Formula: ``engagement * 0.7 + views * 1e-6``
+    Delegates to the shared scoring kernel in :mod:`core.content.scoring`.
 
     Parameters
     ----------
@@ -18,6 +20,4 @@ def score(post: dict[str, Any]) -> float:
     -------
     float
     """
-    engagement = float(post.get("engagement", 0.0))
-    views = int(post.get("views", 0))
-    return engagement * 0.7 + views * 1e-6
+    return _post_score(post)
