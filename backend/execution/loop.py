@@ -97,12 +97,20 @@ def execute(decisions, state):
 
         roas = _generate_roas()
         revenue = roas * cost
-        clicks = max(1, int(cost * 2)) if cost > 0 else 1
-        impressions = max(clicks, int(clicks / 0.02))
-        conversions = max(1, int(clicks * random.uniform(0.02, 0.15)))
-        ctr = clicks / impressions
-        cvr = conversions / clicks
-        cac = cost / conversions if conversions else cost
+        if cost > 0:
+            clicks = max(1, int(cost * 2))
+            impressions = max(clicks, int(clicks / 0.02))
+            conversions = max(1, int(clicks * random.uniform(0.02, 0.15)))
+            ctr = clicks / impressions
+            cvr = conversions / clicks
+            cac = cost / conversions
+        else:
+            clicks = 0
+            impressions = 0
+            conversions = 0
+            ctr = 0.0
+            cvr = 0.0
+            cac = 0.0
         profit = round(revenue - cost, 2)
 
         pred = d.get("pred", 1.0)

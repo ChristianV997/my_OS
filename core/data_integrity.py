@@ -65,13 +65,23 @@ _CAMPAIGN_REQUIRED: dict[str, type] = {
 _CAMPAIGN_POSITIVE = frozenset({"spend", "revenue"})
 
 
+def _type_name(t: type | tuple) -> str:
+    """Return a human-readable type name for error messages."""
+    if isinstance(t, tuple):
+        return " or ".join(x.__name__ for x in t)
+    return t.__name__
+
+
 def validate_campaign(campaign: dict[str, Any]) -> None:
     """Raise ValidationError if *campaign* does not meet schema requirements."""
     for fname, ftype in _CAMPAIGN_REQUIRED.items():
         if fname not in campaign:
             raise ValidationError("campaign", fname, "missing required field")
         if not isinstance(campaign[fname], ftype):
-            raise ValidationError("campaign", fname, f"expected {ftype}, got {type(campaign[fname])}")
+            raise ValidationError(
+                "campaign", fname,
+                f"expected {_type_name(ftype)}, got {type(campaign[fname]).__name__}",
+            )
 
     for fname in _CAMPAIGN_POSITIVE:
         if campaign.get(fname, 0) < 0:
@@ -99,7 +109,10 @@ def validate_product(product: dict[str, Any]) -> None:
         if fname not in product:
             raise ValidationError("product", fname, "missing required field")
         if not isinstance(product[fname], ftype):
-            raise ValidationError("product", fname, f"expected {ftype}, got {type(product[fname])}")
+            raise ValidationError(
+                "product", fname,
+                f"expected {_type_name(ftype)}, got {type(product[fname]).__name__}",
+            )
 
     if not product.get("name"):
         raise ValidationError("product", "name", "name must be a non-empty string")
@@ -128,7 +141,10 @@ def validate_creative(creative: dict[str, Any]) -> None:
         if fname not in creative:
             raise ValidationError("creative", fname, "missing required field")
         if not isinstance(creative[fname], ftype):
-            raise ValidationError("creative", fname, f"expected {ftype}, got {type(creative[fname])}")
+            raise ValidationError(
+                "creative", fname,
+                f"expected {_type_name(ftype)}, got {type(creative[fname]).__name__}",
+            )
 
     fmt = creative.get("format", "")
     if fmt not in _CREATIVE_FORMATS:

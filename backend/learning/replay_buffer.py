@@ -15,7 +15,7 @@ from typing import Any
 _log = logging.getLogger(__name__)
 
 _DEFAULT_PERSIST_PATH = os.path.join(
-    os.path.dirname(__file__), "..", "..", "backend", "state", "replay_buffer.json"
+    os.path.dirname(__file__), "..", "state", "replay_buffer.json"
 )
 
 

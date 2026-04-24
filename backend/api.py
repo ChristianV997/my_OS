@@ -798,8 +798,10 @@ _geo_agent = GeoAgent()
 _audience_agent = AudienceAgent()
 _risk_agent = RiskAgent()
 
-# Peak capital tracker (for drawdown calculation in the global risk engine)
-_peak_capital: float = _state.capital
+
+def _current_peak_capital() -> float:
+    """Read the peak capital tracked by the execution loop (falls back to current capital)."""
+    return getattr(_state, "_peak_capital", _state.capital)
 
 
 @app.get("/agents")
@@ -819,7 +821,7 @@ def agent_performance():
         audience_dec = _audience_agent.decide({"ctr": avg_ctr, "cvr": avg_cvr})
         risk_input = {
             "current_capital": _state.capital,
-            "peak_capital": _peak_capital,
+            "peak_capital": _current_peak_capital(),
             "today_spend": _global_risk_engine.today_spend(),
             "roas": avg_roas,
             "kill_switch": _global_risk_engine.kill_switch_active,
@@ -869,7 +871,7 @@ def capital_allocation():
         override = _global_risk_engine.enforce(
             proposed_budget=raw_budget,
             current_capital=_state.capital,
-            peak_capital=_peak_capital,
+            peak_capital=_current_peak_capital(),
         )
         safe_budget = override.adjusted_budget if override.allowed else 0.0
         result.append({
@@ -877,7 +879,7 @@ def capital_allocation():
             "raw_budget": round(raw_budget, 2),
             "safe_budget": round(safe_budget, 2),
             "allocation_pct": round(raw_budget / total * 100, 2),
-            "risk_override": not override.allowed or override.triggered_cap != "",
+            "risk_override": override.triggered_cap != "" or not override.allowed,
             "risk_reason": override.reason,
             "pred": round(d.get("pred", 0), 4),
         })
