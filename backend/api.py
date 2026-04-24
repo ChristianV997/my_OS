@@ -89,6 +89,16 @@ def _research_runner():
     while _bg_running:
         try:
             scheduler.tick()
+            # Feed trend keywords into the core intelligence discovery loop
+            with _lock:
+                recent = list(_state.event_log.rows[-50:])
+            keywords = list({str(r.get("variant", "")) for r in recent if r.get("variant")})[:20]
+            if keywords:
+                try:
+                    from core.intelligence_loop import run_intelligence
+                    run_intelligence(keywords)
+                except Exception:
+                    pass
         except Exception:
             _api_log.exception("research runner error")
         time.sleep(300)  # check every 5 minutes
@@ -407,6 +417,29 @@ def memory():
     ]
 
 
+@app.get("/agent-metrics")
+def agent_metrics():
+    """Per-agent PnL, decision counts, and drift status."""
+    try:
+        from backend.agents.agent_metrics import agent_metrics_registry
+        return {"agents": agent_metrics_registry.snapshot()}
+    except Exception:
+        return {"agents": []}
+
+
+@app.get("/portfolio")
+def portfolio():
+    """ROAS-weighted budget allocation across active products/variants."""
+    try:
+        from backend.decision.portfolio_engine import get_allocations, top_products
+        return {
+            "allocations": get_allocations(),
+            "top_products": top_products(n=5),
+        }
+    except Exception:
+        return {"allocations": {}, "top_products": []}
+
+
 # ── UPOS compatibility routes (optional — imported only when present) ──────────
 
 try:
@@ -414,6 +447,12 @@ try:
     from api.dashboard import router as _dashboard_router
     app.include_router(_control_router, prefix="/control")
     app.include_router(_dashboard_router, prefix="/dashboard")
+except ImportError:
+    pass
+
+try:
+    from api.pods import router as _pods_router
+    app.include_router(_pods_router, prefix="/pods-v2")
 except ImportError:
     pass
 
