@@ -181,21 +181,55 @@ def resume_runner():
 
 @app.get("/decisions")
 def decisions():
-    """Top 5 ranked decisions with full prediction detail."""
+    """Top 5 ranked decisions with full prediction detail and human-readable reason."""
     top = decide(_state)[:5]
     budgets = budget_allocate(top)
     result = []
     for i, d in enumerate(top):
+        pred = round(d.get("pred", 0), 4)
+        pred_width = round(d.get("pred_width") or 0, 4)
+        system_conf = round(d.get("system_conf") or 0, 4)
+        interval_conf = round(d.get("interval_conf") or 0, 4)
+        score = round(d["score"], 4)
+
+        # Build human-readable decision explanation
+        if pred >= 2.0 and system_conf >= 0.6 and interval_conf >= 0.6:
+            reason = (
+                f"Scaled: ROAS {pred} predicted with high confidence "
+                f"(system={system_conf}, interval={interval_conf})"
+            )
+        elif pred < 1.0:
+            reason = (
+                f"Kill candidate: predicted ROAS {pred} below break-even "
+                f"(score={score})"
+            )
+        elif pred_width > 1.0:
+            reason = (
+                f"Hold: high prediction uncertainty (width={pred_width}), "
+                f"awaiting more data"
+            )
+        elif pred >= 1.5:
+            reason = (
+                f"Monitor/Scale: ROAS {pred} above threshold, "
+                f"confidence={system_conf}"
+            )
+        else:
+            reason = (
+                f"Hold: moderate ROAS {pred}, insufficient confidence "
+                f"(score={score})"
+            )
+
         result.append({
-            "action":     d["action"],
-            "score":      round(d["score"], 4),
-            "pred":       round(d.get("pred", 0), 4),
-            "pred_lo":    round(d.get("pred_lo") or 0, 4),
-            "pred_hi":    round(d.get("pred_hi") or 0, 4),
-            "pred_width": round(d.get("pred_width") or 0, 4),
-            "interval_conf": round(d.get("interval_conf") or 0, 4),
-            "system_conf":   round(d.get("system_conf") or 0, 4),
-            "budget":     round(budgets[i], 2),
+            "action":        d["action"],
+            "score":         score,
+            "pred":          pred,
+            "pred_lo":       round(d.get("pred_lo") or 0, 4),
+            "pred_hi":       round(d.get("pred_hi") or 0, 4),
+            "pred_width":    pred_width,
+            "interval_conf": interval_conf,
+            "system_conf":   system_conf,
+            "budget":        round(budgets[i], 2),
+            "reason":        reason,
         })
     return result
 
@@ -384,4 +418,317 @@ def ajo_apply(campaign_id: str, action: str, budget_multiplier: float = 1.5):
         return apply_decision(campaign_id, action, budget_multiplier)
     except Exception:
         return {"error": "AJO action failed", "campaign_id": campaign_id}
+
+
+# ── Step 41: Real-Time Dashboard Endpoints ────────────────────────────────────
+
+# Mock data store for manual campaign overrides (in-memory)
+_campaign_overrides: dict[str, str] = {}
+
+_MOCK_CAMPAIGNS = [
+    {
+        "campaign_id": "camp_us_001",
+        "geo": "US",
+        "roas": 2.7,
+        "spend": 450.0,
+        "revenue": 1215.0,
+        "ctr": 0.023,
+        "cpc": 0.45,
+        "conversion_rate": 0.031,
+        "status": "scale",
+        "current_budget": 500.0,
+    },
+    {
+        "campaign_id": "camp_uk_002",
+        "geo": "UK",
+        "roas": 1.8,
+        "spend": 220.0,
+        "revenue": 396.0,
+        "ctr": 0.018,
+        "cpc": 0.62,
+        "conversion_rate": 0.021,
+        "status": "hold",
+        "current_budget": 250.0,
+    },
+    {
+        "campaign_id": "camp_ca_003",
+        "geo": "CA",
+        "roas": 0.8,
+        "spend": 180.0,
+        "revenue": 144.0,
+        "ctr": 0.011,
+        "cpc": 0.91,
+        "conversion_rate": 0.012,
+        "status": "kill",
+        "current_budget": 200.0,
+    },
+    {
+        "campaign_id": "camp_au_004",
+        "geo": "AU",
+        "roas": 3.1,
+        "spend": 310.0,
+        "revenue": 961.0,
+        "ctr": 0.031,
+        "cpc": 0.38,
+        "conversion_rate": 0.041,
+        "status": "scale",
+        "current_budget": 400.0,
+    },
+    {
+        "campaign_id": "camp_de_005",
+        "geo": "DE",
+        "roas": 1.4,
+        "spend": 95.0,
+        "revenue": 133.0,
+        "ctr": 0.014,
+        "cpc": 0.75,
+        "conversion_rate": 0.018,
+        "status": "hold",
+        "current_budget": 100.0,
+    },
+]
+
+_MOCK_GEO = [
+    {"country": "US", "roas": 2.7, "spend": 450.0, "revenue": 1215.0, "status": "scaling"},
+    {"country": "UK", "roas": 1.8, "spend": 220.0, "revenue": 396.0,  "status": "testing"},
+    {"country": "CA", "roas": 0.8, "spend": 180.0, "revenue": 144.0,  "status": "paused"},
+    {"country": "AU", "roas": 3.1, "spend": 310.0, "revenue": 961.0,  "status": "scaling"},
+    {"country": "DE", "roas": 1.4, "spend": 95.0,  "revenue": 133.0,  "status": "testing"},
+    {"country": "FR", "roas": 2.0, "spend": 140.0, "revenue": 280.0,  "status": "testing"},
+]
+
+_MOCK_ACCOUNTS = [
+    {
+        "account_id": "acct_001",
+        "name": "Primary TikTok",
+        "status": "scaling",
+        "spend": 1055.0,
+        "risk_flags": [],
+    },
+    {
+        "account_id": "acct_002",
+        "name": "Backup TikTok",
+        "status": "warm",
+        "spend": 250.0,
+        "risk_flags": ["new_account"],
+    },
+    {
+        "account_id": "acct_003",
+        "name": "EU TikTok",
+        "status": "restricted",
+        "spend": 95.0,
+        "risk_flags": ["policy_review", "spend_limited"],
+    },
+]
+
+_MOCK_CREATIVES = {
+    "hooks_ranking": [
+        {"hook": "Stop scrolling — this changed my life", "roas": 3.2, "ctr": 0.041, "views": 48200},
+        {"hook": "I was skeptical until I tried this",   "roas": 2.9, "ctr": 0.036, "views": 39100},
+        {"hook": "The secret nobody tells you about",    "roas": 2.4, "ctr": 0.029, "views": 31500},
+        {"hook": "POV: you finally found the solution",  "roas": 2.1, "ctr": 0.025, "views": 27800},
+        {"hook": "Why are people obsessed with this?",   "roas": 1.7, "ctr": 0.019, "views": 21200},
+    ],
+    "clip_performance": [
+        {"clip_id": "clip_001", "roas": 3.1, "spend": 210.0, "revenue": 651.0,  "views": 45000},
+        {"clip_id": "clip_002", "roas": 2.7, "spend": 180.0, "revenue": 486.0,  "views": 38000},
+        {"clip_id": "clip_003", "roas": 1.9, "spend": 120.0, "revenue": 228.0,  "views": 24000},
+        {"clip_id": "clip_004", "roas": 0.9, "spend": 90.0,  "revenue": 81.0,   "views": 15000},
+    ],
+    "sequence_performance": [
+        {"sequence": "hook→demo→cta",    "avg_roas": 3.0, "completion_rate": 0.72},
+        {"sequence": "hook→social→cta",  "avg_roas": 2.6, "completion_rate": 0.65},
+        {"sequence": "problem→solution", "avg_roas": 2.2, "completion_rate": 0.58},
+    ],
+    "variant_leaderboard": [],
+}
+
+
+@app.get("/campaigns")
+def campaigns():
+    """Campaign performance table with ROAS, spend, status, and geo filters."""
+    rows = _state.event_log.rows
+    recent = rows[-200:] if rows else []
+
+    # Enrich mock campaigns with live avg ROAS from event log if available
+    live_avg_roas = (
+        round(sum(r.get("roas", 0) for r in recent) / max(len(recent), 1), 4)
+        if recent else None
+    )
+
+    result = []
+    for c in _MOCK_CAMPAIGNS:
+        entry = dict(c)
+        # Apply any manual overrides
+        override = _campaign_overrides.get(c["campaign_id"])
+        if override:
+            entry["status"] = override
+            entry["override"] = True
+        else:
+            entry["override"] = False
+        # Attach live system avg_roas as a reference
+        if live_avg_roas is not None:
+            entry["system_avg_roas"] = live_avg_roas
+        result.append(entry)
+
+    return result
+
+
+@app.post("/campaigns/{campaign_id}/override")
+def campaign_override(campaign_id: str, action: str):
+    """Manual override for a campaign: scale | pause | kill."""
+    allowed = {"scale", "pause", "kill", "hold"}
+    if action not in allowed:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail=f"action must be one of {allowed}")
+    _campaign_overrides[campaign_id] = action
+    return {"campaign_id": campaign_id, "status": action, "overridden": True}
+
+
+@app.get("/creatives")
+def creatives():
+    """Creative performance: hooks ranking, clip ROAS, sequence performance, variant leaderboard."""
+    rows = _state.event_log.rows
+    recent = rows[-200:] if rows else []
+
+    # Build live variant leaderboard from event log
+    variant_buckets: dict[str, list[float]] = {}
+    for r in recent:
+        v = str(r.get("variant", ""))
+        if v:
+            variant_buckets.setdefault(v, []).append(float(r.get("roas", 0)))
+    leaderboard = sorted(
+        [
+            {"variant": v, "avg_roas": round(sum(vs) / len(vs), 4), "count": len(vs)}
+            for v, vs in variant_buckets.items()
+        ],
+        key=lambda x: x["avg_roas"],
+        reverse=True,
+    )
+
+    payload = dict(_MOCK_CREATIVES)
+    payload["variant_leaderboard"] = leaderboard or payload["variant_leaderboard"]
+    return payload
+
+
+@app.get("/risk")
+def risk():
+    """Risk monitoring panel: alerts, drawdown, anomaly flags, system health."""
+    rows = _state.event_log.rows
+    recent_48h = rows[-480:] if rows else []  # ~48 h at 1 cycle/6 s
+
+    # Drawdown from event-log capital proxy
+    capital = _state.capital
+    from core.risk.drawdown import DrawdownProtector
+    dp = DrawdownProtector()
+    for r in rows:
+        rev = float(r.get("revenue", 0))
+        dp.update(rev)
+    drawdown_pct = round(dp.drawdown(capital), 4)
+
+    # ROAS over last 48 h
+    roas_48h_values = [float(r.get("roas", 0)) for r in recent_48h]
+    avg_roas_48h = (
+        round(sum(roas_48h_values) / len(roas_48h_values), 4) if roas_48h_values else 0.0
+    )
+
+    # Anomaly detection on ROAS
+    from core.risk.anomaly import AnomalyDetector
+    ad = AnomalyDetector()
+    all_roas = [float(r.get("roas", 0)) for r in rows]
+    for v in all_roas[:-1]:
+        ad.update(v)
+    latest_roas = all_roas[-1] if all_roas else 0.0
+    is_anomaly = ad.is_anomaly(latest_roas) if all_roas else False
+
+    alerts = []
+    if drawdown_pct > 0.30:
+        alerts.append({
+            "level": "critical",
+            "color": "red",
+            "message": f"Drawdown {round(drawdown_pct * 100, 1)}% exceeds 30% threshold",
+            "metric": "drawdown",
+        })
+    if avg_roas_48h < 1.0 and roas_48h_values:
+        alerts.append({
+            "level": "critical",
+            "color": "red",
+            "message": f"ROAS {avg_roas_48h} below 1.0 over last 48 h — review campaigns",
+            "metric": "roas_48h",
+        })
+    if is_anomaly:
+        alerts.append({
+            "level": "warning",
+            "color": "yellow",
+            "message": f"ROAS anomaly detected: latest value {round(latest_roas, 4)}",
+            "metric": "anomaly",
+        })
+
+    # System health colour
+    if any(a["color"] == "red" for a in alerts):
+        health = "critical"
+    elif alerts:
+        health = "warning"
+    else:
+        health = "healthy"
+
+    return {
+        "system_health": health,
+        "drawdown_pct": drawdown_pct,
+        "avg_roas_48h": avg_roas_48h,
+        "anomaly_detected": is_anomaly,
+        "alerts": alerts,
+    }
+
+
+@app.get("/geo")
+def geo():
+    """Geo performance: ROAS per country, spend distribution, expansion status."""
+    rows = _state.event_log.rows
+    recent = rows[-200:] if rows else []
+
+    # Compute live system-wide avg ROAS as a reference
+    live_avg = (
+        round(sum(r.get("roas", 0) for r in recent) / max(len(recent), 1), 4)
+        if recent else None
+    )
+
+    result = [dict(g) for g in _MOCK_GEO]
+    if live_avg is not None:
+        for entry in result:
+            entry["system_avg_roas"] = live_avg
+    return result
+
+
+@app.get("/accounts")
+def accounts():
+    """Account health: status, spend per account, risk flags."""
+    return list(_MOCK_ACCOUNTS)
+
+
+@app.get("/alerts")
+def alerts():
+    """Real-time alerts across all sub-systems with severity levels."""
+    # Delegate to the /risk endpoint logic and aggregate
+    risk_data = risk()
+    base_alerts = list(risk_data.get("alerts", []))
+
+    # Additional alert: pacing (check capital vs expected)
+    rows = _state.event_log.rows
+    recent = rows[-20:] if rows else []
+    if recent:
+        avg_cost = sum(float(r.get("cost", r.get("spend", 0))) for r in recent) / len(recent)
+        if avg_cost > 50:
+            base_alerts.append({
+                "level": "warning",
+                "color": "yellow",
+                "message": f"Pacing alert: avg cycle cost {round(avg_cost, 2)} may exceed budget",
+                "metric": "pacing",
+            })
+
+    return {
+        "count": len(base_alerts),
+        "system_health": risk_data.get("system_health", "healthy"),
+        "alerts": base_alerts,
+    }
 
