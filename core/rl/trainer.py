@@ -18,6 +18,10 @@ class RLTrainer:
         actions: list[str],
         rewards: list[float],
     ) -> None:
-        """Update the policy for each experience in the batch."""
-        for action, reward in zip(actions, rewards):
-            self.policy.update(action, reward)
+        """Update the policy for each experience in the batch.
+
+        State context is passed to the policy update so it can condition
+        its score adjustments on the observed state.
+        """
+        for state, action, reward in zip(states, actions, rewards):
+            self.policy.update(action, reward, state=state)

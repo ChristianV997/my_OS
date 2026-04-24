@@ -74,6 +74,10 @@ class AnomalyModel:
             return float(1.0 - z / _Z_SCORE_THRESHOLD)
         return 0.0
 
+    def add_training_sample(self, x: list[float]) -> None:
+        """Append a single feature vector to the training window."""
+        self._training_data.append(x)
+
     def is_anomaly(self, x: list[float], threshold: float = _IF_THRESHOLD) -> bool:
         """Return True if *x* is anomalous (score < *threshold*)."""
         return self.score(x) < threshold

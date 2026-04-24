@@ -44,9 +44,17 @@ class PolicyNet:
         }
         return self._softmax_sample(scores)
 
-    def update(self, action: str, reward: float) -> None:
-        """Update score for *action* toward *reward* using a moving average."""
+    def update(self, action: str, reward: float, state: dict[str, Any] | None = None) -> None:
+        """Update score for *action* toward *reward* using a moving average.
+
+        If *state* is provided, the ROAS from the state is used to weight the
+        update — high-ROAS states contribute more to the scale/buy scores.
+        """
         alpha = 0.1
+        # State-conditioned weighting: scale reward by relative ROAS
+        if state is not None:
+            roas = state.get("roas", 1.0)
+            reward = reward * max(0.5, min(2.0, roas))
         if action in self._scores:
             self._scores[action] = (1 - alpha) * self._scores[action] + alpha * reward
 

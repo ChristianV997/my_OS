@@ -22,8 +22,8 @@ def detect(state: dict[str, Any]) -> bool:
     """
     x = build_features(state)
 
-    # Accumulate training data and refit when we cross the minimum threshold
-    _model._training_data.append(x)
+    # Accumulate training data via the public API and refit periodically
+    _model.add_training_sample(x)
     _REFIT_INTERVAL = 50
     n = len(_model._training_data)
     if n >= 10 and n % _REFIT_INTERVAL == 0:
