@@ -422,6 +422,10 @@ def ajo_apply(campaign_id: str, action: str, budget_multiplier: float = 1.5):
 
 # ── Step 41: Real-Time Dashboard Endpoints ────────────────────────────────────
 
+# Window constants for event-log slicing
+_RECENT_ROWS_WINDOW = 200       # general short-term window (~20 min at 6 s/cycle)
+_ROWS_PER_48H = 48 * 60 * 10   # 48 h at 10 cycles/min (6 s/cycle) = 28 800 rows
+
 # Mock data store for manual campaign overrides (in-memory)
 _campaign_overrides: dict[str, str] = {}
 
@@ -548,11 +552,11 @@ _MOCK_CREATIVES = {
 def campaigns():
     """Campaign performance table with ROAS, spend, status, and geo filters."""
     rows = _state.event_log.rows
-    recent = rows[-200:] if rows else []
+    recent = rows[-_RECENT_ROWS_WINDOW:] if rows else []
 
     # Enrich mock campaigns with live avg ROAS from event log if available
-    live_avg_roas = (
-        round(sum(r.get("roas", 0) for r in recent) / max(len(recent), 1), 4)
+    live_avg_roas: float | None = (
+        round(sum(r.get("roas", 0) for r in recent) / len(recent), 4)
         if recent else None
     )
 
@@ -589,7 +593,7 @@ def campaign_override(campaign_id: str, action: str):
 def creatives():
     """Creative performance: hooks ranking, clip ROAS, sequence performance, variant leaderboard."""
     rows = _state.event_log.rows
-    recent = rows[-200:] if rows else []
+    recent = rows[-_RECENT_ROWS_WINDOW:] if rows else []
 
     # Build live variant leaderboard from event log
     variant_buckets: dict[str, list[float]] = {}
@@ -615,7 +619,7 @@ def creatives():
 def risk():
     """Risk monitoring panel: alerts, drawdown, anomaly flags, system health."""
     rows = _state.event_log.rows
-    recent_48h = rows[-480:] if rows else []  # ~48 h at 1 cycle/6 s
+    recent_48h = rows[-_ROWS_PER_48H:] if rows else []
 
     # Drawdown from event-log capital proxy
     capital = _state.capital
@@ -685,11 +689,11 @@ def risk():
 def geo():
     """Geo performance: ROAS per country, spend distribution, expansion status."""
     rows = _state.event_log.rows
-    recent = rows[-200:] if rows else []
+    recent = rows[-_RECENT_ROWS_WINDOW:] if rows else []
 
     # Compute live system-wide avg ROAS as a reference
-    live_avg = (
-        round(sum(r.get("roas", 0) for r in recent) / max(len(recent), 1), 4)
+    live_avg: float | None = (
+        round(sum(r.get("roas", 0) for r in recent) / len(recent), 4)
         if recent else None
     )
 
