@@ -20,6 +20,20 @@ def save(state, path=STATE_PATH):
     if path.endswith(".db"):
         from backend.core.db_serializer import save as db_save
         db_save(state, path)
+        # Dual-write to Supabase when credentials are configured
+        try:
+            from backend.integrations.supabase_client import save_state, is_configured
+            if is_configured():
+                payload = {
+                    "capital": state.capital,
+                    "regime": state.regime,
+                    "detected_regime": state.detected_regime,
+                    "energy": state.energy,
+                    "total_cycles": state.total_cycles,
+                }
+                save_state(payload)
+        except Exception:
+            pass
         return
 
     # --- legacy JSON ---

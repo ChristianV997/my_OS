@@ -52,8 +52,35 @@ _bg_running = False
 _started_at = time.time()
 _last_cycle_at: float | None = None
 
+_RESEARCH_INTERVAL_S = 300  # run intelligence loop every 5 minutes
+_last_research_at: float = 0.0
+
 
 # ── background runner ─────────────────────────────────────────────────────────
+
+def _research_runner():
+    """Background thread: every 5 minutes extract trend keywords from recent
+    events and feed them to the core intelligence discovery loop."""
+    global _last_research_at
+    while _bg_running:
+        now = time.time()
+        if now - _last_research_at >= _RESEARCH_INTERVAL_S:
+            try:
+                with _lock:
+                    recent = list(_state.event_log.rows[-50:])
+                # extract variant/product keywords from recent events
+                keywords = list({
+                    str(r.get("variant", ""))
+                    for r in recent
+                    if r.get("variant")
+                })[:20]
+                from core.intelligence_loop import run_intelligence
+                run_intelligence(keywords)
+            except Exception:
+                pass
+            _last_research_at = now
+        time.sleep(10)
+
 
 def _background_runner():
     global _state, _last_cycle_at
@@ -78,6 +105,7 @@ async def _startup():
 
     _bg_running = True
     threading.Thread(target=_background_runner, daemon=True).start()
+    threading.Thread(target=_research_runner, daemon=True).start()
 
 
 @app.on_event("shutdown")
@@ -112,6 +140,24 @@ def _variant_avg(rows: list[dict]) -> dict[str, float]:
         v = str(r.get("variant", "?"))
         buckets.setdefault(v, []).append(float(r.get("roas", 0)))
     return {v: round(sum(vs) / len(vs), 4) for v, vs in buckets.items()}
+
+
+def _cac_estimate() -> float | None:
+    """Compute CAC estimate from core memory events.
+
+    Returns None when insufficient data is available.
+    """
+    try:
+        from core.cac import estimate_cac
+        from core.memory import get_memory
+        events = get_memory()
+        if not events:
+            # Fall back to recent event_log rows
+            events = _state.event_log.rows[-100:]
+        cac = estimate_cac(events)
+        return round(cac, 4) if cac else None
+    except Exception:
+        return None
 
 
 # ── endpoints ─────────────────────────────────────────────────────────────────
@@ -253,6 +299,7 @@ def metrics():
         "causal_edges": len(_state.graph.edges),
         "population_diversity": diversity,
         "event_count": len(rows),
+        "cac_estimate": _cac_estimate(),
     }
 
 
