@@ -1,7 +1,72 @@
+"""core.creative.generator — ad creative generation utilities.
+
+Provides two complementary generation strategies:
+
+* :func:`generate_creative` — AI-powered single script via Anthropic Claude API.
+* :func:`generate_creatives` — hook-template-based batch generator (Step 65).
+"""
+from __future__ import annotations
+
+from typing import Any
+
 try:
     import anthropic as _anthropic
 except ImportError:
     _anthropic = None
+
+# ---------------------------------------------------------------------------
+# Step 65 — hook-template generator
+# ---------------------------------------------------------------------------
+
+_HOOKS: dict[str, list[str]] = {
+    "satisfaction": [
+        "watch this",
+        "this is so satisfying",
+    ],
+    "problem": [
+        "this fixes...",
+        "stop doing this wrong",
+    ],
+    "convenience": [
+        "this saves so much time",
+        "the easiest way to do this",
+    ],
+    "transformation": [
+        "before vs after",
+        "this changed everything",
+    ],
+}
+
+
+def generate_creatives(product: str, angle: str) -> list[dict[str, Any]]:
+    """Return hook-based creative variants for *product* and *angle*.
+
+    Parameters
+    ----------
+    product:
+        Product name to feature in each creative.
+    angle:
+        Content angle key (e.g. ``"satisfaction"``, ``"problem"``).
+
+    Returns
+    -------
+    list[dict]
+        Each dict contains ``hook``, ``body``, and ``cta`` keys.
+    """
+    hooks = _HOOKS.get(angle, [f"{angle} hook"])
+    return [
+        {
+            "hook": h,
+            "body": f"show {product} solving problem",
+            "cta": "get it now",
+        }
+        for h in hooks
+    ]
+
+
+# ---------------------------------------------------------------------------
+# AI-powered single-script generator
+# ---------------------------------------------------------------------------
 
 
 def generate_creative(product: str, angle: str) -> str:
