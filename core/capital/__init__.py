@@ -1,3 +1,9 @@
+"""core.capital — capital allocation engine.
+
+This package contains the original CapitalEngine (pod-level) plus the new
+softmax-based allocator introduced in Step 54.
+"""
+# Re-export the original CapitalEngine from the module-level contents
 SCALE_ROAS_THRESHOLD = 2.5
 KILL_ROAS_THRESHOLD = 1.5
 SCALE_FACTOR = 1.5
