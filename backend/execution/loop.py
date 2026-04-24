@@ -167,6 +167,36 @@ def run_cycle(state):
     # feed results into portfolio engine for ROAS-weighted allocation
     portfolio_ingest(results)
 
+    # auto_kill: pause underperforming campaigns via AJO (ROAS < 0.5)
+    _kill_set = set()
+    for r in results:
+        campaign_id = str(r.get("action", {}).get("variant", ""))
+        if campaign_id and r.get("roas", 1.0) < 0.5:
+            _kill_set.add(campaign_id)
+    if _kill_set:
+        try:
+            from backend.integrations.adobe_ajo import pause_campaign, is_configured as _ajo_ok
+            if _ajo_ok():
+                for cid in _kill_set:
+                    pause_campaign(cid)
+        except Exception:
+            pass
+
+    # amplifier: scale high-ROAS campaigns via AJO (ROAS > 2.0)
+    _amplified = [
+        str(r.get("action", {}).get("variant", ""))
+        for r in results
+        if r.get("roas", 0.0) > 2.0 and r.get("action", {}).get("variant")
+    ]
+    if _amplified:
+        try:
+            from backend.integrations.adobe_ajo import scale_campaign, is_configured as _ajo_ok
+            if _ajo_ok():
+                for cid in _amplified[-5:]:
+                    scale_campaign(cid)
+        except Exception:
+            pass
+
     state = learn(state, results)
     state.graph = update_causal(state.graph, state.event_log)
 
@@ -187,7 +217,7 @@ def run_cycle(state):
         replay_buffer.add(features, action, r.get("roas", 0.0))
 
     previous_regime = state.detected_regime
-    state.detected_regime = detector.detect(state.event_log)
+    state.detected_regime = detector.detect(state.event_log, _macro_cache or None)
     transition_detected = detect_transition(previous_regime, state.detected_regime)
     state.previous_regime = previous_regime
     state.transition = {
