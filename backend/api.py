@@ -346,8 +346,8 @@ def macro():
     from connectors.macro_signals import get_macro_signals
     try:
         return get_macro_signals()
-    except Exception as exc:
-        return {"error": str(exc)}
+    except Exception:
+        return {"error": "macro signals unavailable"}
 
 
 @app.get("/portfolio")
@@ -380,5 +380,8 @@ def bandit_status():
 def ajo_apply(campaign_id: str, action: str, budget_multiplier: float = 1.5):
     """Apply a MarketOS action (pause/scale/hold) to an Adobe AJO campaign."""
     from connectors.adobe_ajo_connector import apply_decision
-    return apply_decision(campaign_id, action, budget_multiplier)
+    try:
+        return apply_decision(campaign_id, action, budget_multiplier)
+    except Exception:
+        return {"error": "AJO action failed", "campaign_id": campaign_id}
 

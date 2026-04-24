@@ -37,6 +37,9 @@ _prev_avg_roas: float | None = None
 
 TOTAL_CYCLE_BUDGET = 500.0  # total spend per cycle, split across all decisions
 TRANSITION_COOLDOWN_CYCLES = 5
+# Scales the macro-risk adjustment to trend; 0.02 keeps macro nudge small
+# relative to the ±0.1 volatile step, preventing macro from dominating.
+_MACRO_TREND_COEFFICIENT = 0.02
 
 
 def _simulate_environment():
@@ -52,7 +55,7 @@ def _simulate_environment():
         ENV["trend"] *= 0.95
     # Macro risk nudges the trend: high risk → downward pressure
     macro_risk = _macro_cache.get("macro_risk_score", 0.5)
-    ENV["trend"] -= (macro_risk - 0.5) * 0.02
+    ENV["trend"] -= (macro_risk - 0.5) * _MACRO_TREND_COEFFICIENT
     ENV["trend"] = max(-1.0, min(1.0, ENV["trend"]))
 
 

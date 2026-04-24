@@ -15,6 +15,7 @@ Environment variables:
 """
 import datetime
 import os
+import threading
 
 try:
     import requests as _requests
@@ -29,7 +30,8 @@ IMS_URL = os.getenv("ADOBE_IMS_URL", "https://ims-na1.adobelogin.com/ims/token/v
 
 _AJO_BASE = "https://journey-optimizer.adobe.io/restapi/v1"
 
-# Module-level token cache
+# Thread-safe token cache
+_token_lock = threading.Lock()
 _token_cache: dict = {"access_token": "", "expires_at": datetime.datetime.min.replace(tzinfo=datetime.timezone.utc)}
 
 
@@ -38,33 +40,34 @@ def _is_configured() -> bool:
 
 
 def _get_access_token() -> str:
-    """Return a valid access token, refreshing via OAuth if needed."""
-    now = datetime.datetime.now(datetime.timezone.utc)
-    if _token_cache["access_token"] and now < _token_cache["expires_at"]:
-        return _token_cache["access_token"]
+    """Return a valid access token, refreshing via OAuth if needed (thread-safe)."""
+    with _token_lock:
+        now = datetime.datetime.now(datetime.timezone.utc)
+        if _token_cache["access_token"] and now < _token_cache["expires_at"]:
+            return _token_cache["access_token"]
 
-    try:
-        resp = _requests.post(
-            IMS_URL,
-            data={
-                "grant_type": "client_credentials",
-                "client_id": CLIENT_ID,
-                "client_secret": CLIENT_SECRET,
-                "scope": "openid,AdobeID,read_organizations",
-            },
-            timeout=15,
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        token = data.get("access_token", "")
-        expires_in = int(data.get("expires_in", 3600))
-        _token_cache["access_token"] = token
-        _token_cache["expires_at"] = now + datetime.timedelta(seconds=expires_in - 60)
-        return token
-    except (KeyboardInterrupt, SystemExit):
-        raise
-    except Exception:
-        return ""
+        try:
+            resp = _requests.post(
+                IMS_URL,
+                data={
+                    "grant_type": "client_credentials",
+                    "client_id": CLIENT_ID,
+                    "client_secret": CLIENT_SECRET,
+                    "scope": "openid,AdobeID,read_organizations",
+                },
+                timeout=15,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            token = data.get("access_token", "")
+            expires_in = int(data.get("expires_in", 3600))
+            _token_cache["access_token"] = token
+            _token_cache["expires_at"] = now + datetime.timedelta(seconds=expires_in - 60)
+            return token
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except Exception:
+            return ""
 
 
 def _headers() -> dict:

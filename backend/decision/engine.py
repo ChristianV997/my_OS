@@ -98,8 +98,13 @@ def decide(state):
         variant = product_variants[i % len(product_variants)]
         action = {"variant": variant}
 
+        # use product title as competition keyword when available for meaningful scoring
+        if products and i < len(products):
+            keyword = str(products[i].get("title", variant))
+        else:
+            keyword = str(variant)
+
         # competition penalty: high density → lower score for this variant
-        keyword = str(variant)
         competition_density = _refresh_competition(keyword)
         competition_penalty = competition_density * 0.2  # scale to ≤ 0.2
 
