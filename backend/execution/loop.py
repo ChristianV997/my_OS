@@ -3,11 +3,15 @@ import random
 
 from backend.decision.engine import decide
 from backend.decision.budget_allocator import allocate as budget_allocate, allocation_summary
+from backend.decision.portfolio_engine import ingest_results as portfolio_ingest
 from backend.learning.delayed_rewards import DelayedRewardStore
 from backend.learning.bandit_update import update_from_delayed
 from backend.learning.update import learn
 from backend.learning.calibration import calibration_model
 from backend.learning.calibration_log import calibration_log
+from backend.learning.contextual_bandit import select_arm, record_reward
+from backend.learning.replay_buffer import replay_buffer
+from backend.learning.world_model_calibration import world_model_calibrator
 from backend.causal.update import update_causal
 from backend.regime.detector import detector
 from backend.regime.confidence import regime_confidence
@@ -16,12 +20,14 @@ from backend.core.state import ensure_state_shape
 from backend.regime.meta_strategy import strategy_memory
 from backend.agents.structural_evolution import structural_engine
 from backend.agents.self_healing import self_healing_engine
+from backend.agents.agent_metrics import agent_metrics_registry
 from backend.simulation.reality_gap import reality_gap_engine
 from agents.auto_kill import should_kill
 from agents.amplifier import Amplifier
 from backend.integrations.shopify_client import get_orders, compute_metrics
 from backend.integrations.meta_ads_client import get_ad_spend
 import backend.ci.hyperparam_meta as hp_meta
+from connectors.macro_signals import get_macro_signals
 
 _log = logging.getLogger(__name__)
 _amplifier = Amplifier()
@@ -30,12 +36,19 @@ store = DelayedRewardStore()
 # Stochastic market environment — regime-driven trend with noise
 ENV = {"trend": 0.0, "regime": "stable"}
 
+# Cached macro context refreshed every N cycles to avoid excessive API calls
+_macro_cache: dict = {}
+_MACRO_REFRESH_CYCLES = 10
+
 # Hyperparameter meta-learning state (persisted to JSON file)
 _hp_meta_state = hp_meta.load_hp_meta()
 _prev_avg_roas: float | None = None
 
 TOTAL_CYCLE_BUDGET = 500.0  # total spend per cycle, split across all decisions
 TRANSITION_COOLDOWN_CYCLES = 5
+# Scales the macro-risk adjustment to trend; 0.02 keeps macro nudge small
+# relative to the ±0.1 volatile step, preventing macro from dominating.
+_MACRO_TREND_COEFFICIENT = 0.02
 
 # Campaigns flagged for kill (module-level; cleared on restart)
 _kill_set: set[str] = set()
@@ -56,6 +69,9 @@ def _simulate_environment():
         ENV["trend"] += random.uniform(-0.1, 0.1)
     elif ENV["regime"] == "stable":
         ENV["trend"] *= 0.95
+    # Macro risk nudges the trend: high risk → downward pressure
+    macro_risk = _macro_cache.get("macro_risk_score", 0.5)
+    ENV["trend"] -= (macro_risk - 0.5) * _MACRO_TREND_COEFFICIENT
     ENV["trend"] = max(-1.0, min(1.0, ENV["trend"]))
 
 
@@ -98,30 +114,44 @@ def execute(decisions, state):
     budgets = budget_allocate(decisions, total_budget=TOTAL_CYCLE_BUDGET)
     _log.debug(allocation_summary(decisions, budgets))
 
+    # Track peak capital for drawdown monitoring (stored on state object)
+    peak_capital = getattr(state, "_peak_capital", state.capital)
+    if state.capital > peak_capital:
+        peak_capital = state.capital
+    state._peak_capital = peak_capital
+
     results = []
     for i, d in enumerate(decisions):
         action = d.get("action", {})
         structure = d.get("structure")
-        campaign_id = str(action.get("campaign_id", ""))
-
-        # killed campaigns get minimum spend so they don't skew budget
-        if campaign_id and campaign_id in _kill_set:
-            cost = 5.0
-        else:
-            cost = round(budgets[i], 4)
+        campaign_id = str(action.get("campaign_id", "") or action.get("variant", ""))
+        cost = round(budgets[i], 4)
 
         roas = _generate_roas()
         revenue = roas * cost
-        clicks = max(1, int(cost * 2))
-        impressions = max(clicks, int(clicks / 0.02))
-        conversions = max(1, int(clicks * random.uniform(0.02, 0.15)))
-        ctr = clicks / impressions
-        cvr = conversions / clicks
-        cac = cost / conversions if conversions else cost
+        if cost > 0:
+            clicks = max(1, int(cost * 2))
+            impressions = max(clicks, int(clicks / 0.02))
+            conversions = max(1, int(clicks * random.uniform(0.02, 0.15)))
+            ctr = clicks / impressions
+            cvr = conversions / clicks
+            cac = cost / conversions
+        else:
+            clicks = 0
+            impressions = 0
+            conversions = 0
+            ctr = 0.0
+            cvr = 0.0
+            cac = 0.0
         profit = round(revenue - cost, 2)
 
         pred = d.get("pred", 1.0)
         calibration_model.update(pred, roas)
+        # Bayesian world model calibration
+        world_model_calibrator.update(pred, roas)
+
+        # Record agent-level metrics
+        agent_metrics_registry.record_pnl("execution", revenue, cost)
 
         outcome = {
             "roas":          round(roas, 4),
@@ -175,10 +205,22 @@ def process_delayed():
 
 
 def run_cycle(state):
+    global _macro_cache
+
     state = ensure_state_shape(state)
 
     if not structural_engine.population:
         structural_engine.initialize(n=5)
+
+    # refresh macro signals periodically (no-op when FRED key absent)
+    if state.total_cycles % _MACRO_REFRESH_CYCLES == 0:
+        try:
+            _macro_cache = get_macro_signals()
+        except Exception:
+            pass
+
+    # select high-level arm from LinUCB contextual bandit
+    bandit_arm = select_arm(state)
 
     try:
         decisions = decide(state)
@@ -190,6 +232,39 @@ def run_cycle(state):
 
     state.event_log.log_batch(results)
 
+    # feed results into portfolio engine for ROAS-weighted allocation
+    portfolio_ingest(results)
+
+    # auto_kill: pause underperforming campaigns via AJO (ROAS < 0.5)
+    _cycle_kill = {
+        str(r.get("action", {}).get("variant", ""))
+        for r in results
+        if r.get("roas", 1.0) < 0.5 and r.get("action", {}).get("variant")
+    }
+    if _cycle_kill:
+        try:
+            from backend.integrations.adobe_ajo import pause_campaign, is_configured as _ajo_ok
+            if _ajo_ok():
+                for cid in _cycle_kill:
+                    pause_campaign(cid)
+        except Exception:
+            pass
+
+    # amplifier: scale high-ROAS campaigns via AJO (ROAS > 2.0)
+    _amplified_ids = [
+        str(r.get("action", {}).get("variant", ""))
+        for r in results
+        if r.get("roas", 0.0) > 2.0 and r.get("action", {}).get("variant")
+    ]
+    if _amplified_ids:
+        try:
+            from backend.integrations.adobe_ajo import scale_campaign, is_configured as _ajo_ok
+            if _ajo_ok():
+                for cid in _amplified_ids[-5:]:
+                    scale_campaign(cid)
+        except Exception:
+            pass
+
     try:
         state = learn(state, results)
     except Exception:
@@ -200,8 +275,24 @@ def run_cycle(state):
     except Exception:
         _log.exception("cycle causal failed")
 
+    # update LinUCB bandit reward using mean ROAS this cycle
+    avg_roas_cycle = sum(r.get("roas", 0) for r in results) / max(len(results), 1)
+    record_reward(bandit_arm, state, avg_roas_cycle)
+
+    # push experiences into the replay buffer
+    for r in results:
+        action = r.get("action", {})
+        features = [
+            float(r.get("roas", 0)),
+            float(r.get("cost", 0)),
+            float(r.get("ctr", 0)),
+            float(r.get("cvr", 0)),
+            float(_macro_cache.get("macro_risk_score", 0.5)),
+        ]
+        replay_buffer.add(features, action, r.get("roas", 0.0))
+
     previous_regime = state.detected_regime
-    state.detected_regime = detector.detect(state.event_log)
+    state.detected_regime = detector.detect(state.event_log, _macro_cache or None)
     transition_detected = detect_transition(previous_regime, state.detected_regime)
     state.previous_regime = previous_regime
     state.transition = {
@@ -257,6 +348,20 @@ def run_cycle(state):
             hp_meta.save_hp_meta(_hp_meta_state)
         except Exception:
             _log.exception("cycle evolution failed")
+
+    # persist cycle summary to Supabase (no-op when credentials absent)
+    try:
+        from connectors.supabase_connector import save_cycle_summary
+        save_cycle_summary({
+            "total_cycles": state.total_cycles,
+            "capital": round(state.capital, 2),
+            "detected_regime": state.detected_regime,
+            "avg_roas": round(avg_roas_cycle, 4),
+            "macro_risk": _macro_cache.get("macro_risk_score"),
+            "bandit_arm": bandit_arm,
+        })
+    except Exception:
+        pass
 
     state.total_cycles += 1
     return state

@@ -112,3 +112,46 @@ class TestConsistency:
         roas = [3.0 - 0.1 * i for i in range(20)]
         log = _make_log(roas)
         assert detector.detect(log) != "stable"
+
+
+# ── macro override ────────────────────────────────────────────────────────────
+
+class TestMacroOverride:
+    def test_high_vix_forces_volatile(self, detector):
+        """VIX > 30 must override stable base regime."""
+        roas = [1.0 + 0.001 * (i % 3 - 1) for i in range(30)]
+        log = _make_log(roas)
+        base = detector.detect(log)
+        assert base == "stable"
+        # Now pass high VIX macro signal
+        result = detector.detect(log, {"vix": 35.0})
+        assert result == "volatile"
+
+    def test_negative_gdp_stable_forces_decay(self, detector):
+        """Negative GDP + stable base must become decay."""
+        roas = [1.0 + 0.001 * (i % 3 - 1) for i in range(30)]
+        log = _make_log(roas)
+        result = detector.detect(log, {"gdp_growth": -0.5})
+        assert result == "decay"
+
+    def test_negative_gdp_growth_regime_unchanged(self, detector):
+        """Negative GDP does NOT override a growth base regime."""
+        roas = [0.5 + 0.08 * i for i in range(30)]
+        log = _make_log(roas)
+        result = detector.detect(log, {"gdp_growth": -0.5})
+        assert result == "growth"
+
+    def test_no_macro_signals_unchanged(self, detector):
+        """Empty macro_signals dict must not change regime."""
+        roas = [0.5 + 0.08 * i for i in range(30)]
+        log = _make_log(roas)
+        base = detector.detect(log)
+        result = detector.detect(log, {})
+        assert result == base
+
+    def test_apply_macro_override_standalone(self):
+        from backend.regime.detector import apply_macro_override
+        assert apply_macro_override("stable", {"vix": 31.0}) == "volatile"
+        assert apply_macro_override("stable", {"gdp_growth": -1.0}) == "decay"
+        assert apply_macro_override("growth", {"gdp_growth": -1.0}) == "growth"
+        assert apply_macro_override("stable", {}) == "stable"
