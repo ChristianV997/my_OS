@@ -54,3 +54,40 @@ class SignalEngine:
 
 
 signal_engine = SignalEngine()
+
+# ── auto-register real adapters ───────────────────────────────────────────────
+# Each adapter registers itself if importable; no-op on ImportError.
+def _register_adapters() -> None:
+    try:
+        from backend.adapters.amazon_bestsellers import register as _r1
+        _r1(signal_engine)
+    except Exception:
+        pass
+    try:
+        from backend.adapters.tiktok_organic import register as _r2
+        _r2(signal_engine)
+    except Exception:
+        pass
+    # Google Trends adapter via existing research adapter registry
+    try:
+        from backend.adapters.research import GoogleTrendsAdapterV1
+        from datetime import datetime, timezone
+        def _google_trends_fetch():
+            adapter = GoogleTrendsAdapterV1()
+            raw = adapter.fetch()
+            return [
+                {
+                    "product":  adapter.to_canonical(r, fetched_at=datetime.now(timezone.utc)).keyword,
+                    "score":    getattr(adapter.to_canonical(r, fetched_at=datetime.now(timezone.utc)), "confidence", 0.6),
+                    "velocity": getattr(adapter.to_canonical(r, fetched_at=datetime.now(timezone.utc)), "velocity", 1.0),
+                    "source":   "google_trends",
+                    "platform": "google",
+                }
+                for r in raw
+            ]
+        signal_engine.register_source("google_trends", _google_trends_fetch)
+    except Exception:
+        pass
+
+
+_register_adapters()

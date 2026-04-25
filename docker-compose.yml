@@ -1,0 +1,84 @@
+version: "3.9"
+
+# ── Local development stack ───────────────────────────────────────────────────
+# Usage:
+#   docker compose up            # start everything
+#   docker compose up api        # API only (Redis must be running)
+#   docker compose logs -f api   # tail API logs
+#
+# Secrets: copy .env.example to .env and fill in values.
+# The API hot-reloads on code changes via the bind mount.
+
+x-common: &common
+  build: .
+  env_file: .env
+  environment:
+    REDIS_URL: redis://redis:6379/0
+    CELERY_BROKER_URL: redis://redis:6379/0
+    CELERY_RESULT_BACKEND: redis://redis:6379/1
+  volumes:
+    - .:/app
+  depends_on:
+    redis:
+      condition: service_healthy
+
+services:
+
+  # ── API ────────────────────────────────────────────────────────────────────
+  api:
+    <<: *common
+    command: uvicorn backend.api:app --host 0.0.0.0 --port 3000 --reload
+    ports:
+      - "3000:3000"
+
+  # ── Celery worker ──────────────────────────────────────────────────────────
+  worker:
+    <<: *common
+    command: celery -A core.celery_app worker --loglevel=info --concurrency=4
+
+  # ── Celery beat scheduler ──────────────────────────────────────────────────
+  beat:
+    <<: *common
+    command: celery -A core.celery_app beat --loglevel=info
+
+  # ── Orchestrator ──────────────────────────────────────────────────────────
+  orchestrator:
+    <<: *common
+    command: python -m orchestrator.main
+
+  # ── Redis ─────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # ── Prometheus ────────────────────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+
+  # ── Grafana ───────────────────────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3001:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana_data:/var/lib/grafana
+
+volumes:
+  grafana_data:

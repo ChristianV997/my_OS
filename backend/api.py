@@ -18,6 +18,34 @@ from datetime import datetime, timezone
 import numpy as np
 from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import PlainTextResponse
+
+# ── structured logging ────────────────────────────────────────────────────────
+try:
+    import structlog
+    structlog.configure(
+        processors=[
+            structlog.processors.TimeStamper(fmt="iso"),
+            structlog.stdlib.add_log_level,
+            structlog.processors.JSONRenderer(),
+        ],
+        wrapper_class=structlog.stdlib.BoundLogger,
+        logger_factory=structlog.stdlib.LoggerFactory(),
+    )
+except ImportError:
+    pass  # fall back to standard logging
+
+# ── Prometheus metrics ────────────────────────────────────────────────────────
+try:
+    from prometheus_client import Counter, Gauge, Histogram, generate_latest, CONTENT_TYPE_LATEST
+    _prom_cycles     = Counter("marketos_cycles_total",       "Total run_cycle() calls")
+    _prom_capital    = Gauge("marketos_capital_usd",          "Current capital in USD")
+    _prom_avg_roas   = Gauge("marketos_avg_roas",             "Average ROAS last 100 cycles")
+    _prom_regime     = Gauge("marketos_regime",               "Detected regime label", ["regime"])
+    _prom_cycle_time = Histogram("marketos_cycle_duration_s", "run_cycle() latency")
+    _PROMETHEUS_OK   = True
+except ImportError:
+    _PROMETHEUS_OK = False
 
 from backend.core.state import SystemState
 from backend.execution.loop import run_cycle
@@ -66,11 +94,23 @@ def _background_runner():
     global _state, _last_cycle_at
     sleep_s = 60.0 / _CYCLES_PER_MINUTE
     while _bg_running:
+        t0 = time.time()
         try:
             new_state = run_cycle(_state)   # compute outside lock
             with _lock:
                 _state = new_state
                 _last_cycle_at = time.time()
+            # Prometheus instrumentation
+            if _PROMETHEUS_OK:
+                elapsed = time.time() - t0
+                _prom_cycles.inc()
+                _prom_capital.set(new_state.capital)
+                rows = new_state.event_log.rows[-100:]
+                avg_roas = sum(r.get("roas", 0) for r in rows) / max(len(rows), 1)
+                _prom_avg_roas.set(avg_roas)
+                regime = new_state.detected_regime or "unknown"
+                _prom_regime.labels(regime=regime).set(1)
+                _prom_cycle_time.observe(elapsed)
         except Exception:
             _api_log.exception("background runner cycle error")
         time.sleep(sleep_s)
@@ -455,6 +495,32 @@ try:
     app.include_router(_pods_router, prefix="/pods-v2")
 except ImportError:
     pass
+
+
+# ── observability endpoints ───────────────────────────────────────────────────
+
+@app.get("/metrics/prometheus", response_class=PlainTextResponse)
+def prometheus_metrics():
+    """Prometheus scrape endpoint — exposes all registered metrics."""
+    if not _PROMETHEUS_OK:
+        return PlainTextResponse("# prometheus_client not installed\n", media_type="text/plain")
+    return PlainTextResponse(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
+
+@app.get("/phase")
+def phase_status():
+    """Current lifecycle phase and promotion KPIs."""
+    try:
+        from core.system.phase_controller import phase_controller
+        from core.system.resource_allocator import resource_allocator
+        status = phase_controller.status()
+        alloc  = resource_allocator.describe(
+            phase_controller.current,
+            total_budget=500.0,
+        )
+        return {"phase": status, "allocation": alloc}
+    except Exception:
+        return {"phase": {"phase": "RESEARCH"}, "allocation": {}}
 
 
 # ── Phase 2 connector endpoints ───────────────────────────────────────────────
