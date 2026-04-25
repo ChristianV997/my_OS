@@ -88,13 +88,36 @@ def _run_execution_cycle() -> dict[str, Any]:
 
 
 def _run_feedback_collection() -> dict[str, Any]:
-    """Collect content metrics and push to playbook memory."""
+    """Classify recent content events, extract patterns, and update playbooks."""
     try:
-        from core.content.feedback import classify_video
-        # In production this reads from TikTok/Meta metrics API
-        return {"status": "ok", "classified": 0}
-    except Exception:
-        return {"status": "skipped"}
+        from core.content.feedback import batch_classify
+        from core.content.patterns import extract_patterns, pattern_store
+        from core.content.playbook import generate_playbook, playbook_memory
+        try:
+            from backend.api import _state  # type: ignore[attr-defined]
+            rows = list(_state.event_log.rows[-50:])
+        except Exception:
+            rows = []
+        if not rows:
+            return {"status": "skipped", "reason": "no_events"}
+        classified = batch_classify(rows)
+        winners = [e for e in classified if e.get("label") == "WINNER"]
+        if winners:
+            patterns = extract_patterns(winners)
+            pattern_store.update(patterns)
+            products = {e.get("product", "") for e in winners if e.get("product")}
+            for product in products:
+                product_events = [e for e in classified if e.get("product") == product]
+                try:
+                    from core.system.phase_controller import phase_controller
+                    phase = phase_controller.current.value
+                except Exception:
+                    phase = "EXPLORE"
+                playbook_memory.upsert(generate_playbook(product, product_events, phase))
+        return {"status": "ok", "classified": len(classified), "winners": len(winners)}
+    except Exception as exc:
+        _log.exception("feedback_collection_failed error=%s", exc)
+        return {"status": "error", "error": str(exc)}
 
 
 def _run_scaling() -> dict[str, Any]:

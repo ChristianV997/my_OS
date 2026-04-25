@@ -561,6 +561,24 @@ def bandit_status():
     return {"arms": b.arms, "alpha": b.alpha}
 
 
+@app.get("/playbook")
+def get_playbook(product: str = None):
+    """Return stored playbooks and content patterns. Filter by ?product= if desired."""
+    try:
+        from core.content.playbook import playbook_memory
+        from core.content.patterns import pattern_store
+        playbooks = playbook_memory.all()
+        if product:
+            pb = playbook_memory.get(product)
+            playbooks = [pb] if pb else []
+        return {
+            "playbooks": [vars(p) for p in playbooks],
+            "patterns":  pattern_store.get_patterns(),
+        }
+    except Exception as exc:
+        return {"error": str(exc)}
+
+
 @app.post("/ajo/apply")
 def ajo_apply(campaign_id: str, action: str, budget_multiplier: float = 1.5):
     """Apply a MarketOS action (pause/scale/hold) to an Adobe AJO campaign."""
