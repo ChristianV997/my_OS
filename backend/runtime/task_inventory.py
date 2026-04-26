@@ -351,6 +351,13 @@ def _register_all() -> None:
         description="build_snapshot() → stream.publish(): full RuntimeSnapshot pushed every cycle",
         module="backend.runtime.state",
     )
+    task_registry.register(
+        "simulation_worker",
+        kind="loop",
+        description="SimulationEngine.score_signals(): pre-execution scoring+ranking of signal candidates",
+        module="simulation.integration",
+        interval_s=10,
+    )
 
 
 _register_all()

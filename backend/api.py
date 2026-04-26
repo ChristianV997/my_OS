@@ -1123,6 +1123,44 @@ def tiktok_check_and_act(campaign_id: str, spend: float, budget: float, roas: fl
         return {"error": str(exc)}
 
 
+# ── Simulation layer ───────────────────────────────────────────────────────────
+
+@app.get("/simulation/scores")
+def simulation_scores(limit: int = 20):
+    """Return top-ranked simulation scores from the most recent scoring run."""
+    try:
+        from simulation.engine import simulation_engine
+        from core.signals import signal_engine as _sig
+        from core.content.patterns import pattern_store
+        from core.content.playbook import playbook_memory
+
+        patterns = pattern_store.get_patterns()
+        all_playbooks = {p.product: p for p in playbook_memory.all()}
+        signals = _sig.get()[:limit]
+        ranked = simulation_engine.score_signals(
+            signals,
+            patterns=patterns,
+            playbooks=all_playbooks,
+        )
+        return {
+            "scores": [r.to_dict() for r in ranked],
+            "total": len(ranked),
+            "model_info": simulation_engine.report().get("model", {}),
+        }
+    except Exception as exc:
+        return {"error": str(exc), "scores": []}
+
+
+@app.get("/simulation/report")
+def simulation_report():
+    """Return simulation layer health: calibration stats, model info, replay row count."""
+    try:
+        from simulation.engine import simulation_engine
+        return simulation_engine.report()
+    except Exception as exc:
+        return {"error": str(exc)}
+
+
 # ── WebSocket live event stream ────────────────────────────────────────────────
 
 try:

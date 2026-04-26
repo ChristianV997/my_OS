@@ -139,11 +139,22 @@ def _run_scaling() -> dict[str, Any]:
         return {"status": "error", "error": str(exc)}
 
 
+def _run_simulation() -> dict[str, Any]:
+    """Score and rank signal candidates before execution (simulation layer)."""
+    try:
+        from simulation.integration import _run_simulation as _sim
+        result = _sim()
+        return result
+    except Exception as exc:
+        _log.exception("simulation_worker_failed error=%s", exc)
+        return {"status": "error", "error": str(exc)}
+
+
 # ── phase dispatch table ───────────────────────────────────────────────────────
 
 _PHASE_WORKERS: dict[Phase, list[Any]] = {
-    Phase.RESEARCH:  [_run_signal_ingestion, _run_signal_ingestion, _run_execution_cycle],
-    Phase.EXPLORE:   [_run_signal_ingestion, _run_execution_cycle, _run_execution_cycle, _run_feedback_collection],
+    Phase.RESEARCH:  [_run_simulation, _run_signal_ingestion, _run_signal_ingestion, _run_execution_cycle],
+    Phase.EXPLORE:   [_run_simulation, _run_signal_ingestion, _run_execution_cycle, _run_execution_cycle, _run_feedback_collection],
     Phase.VALIDATE:  [_run_signal_ingestion, _run_execution_cycle, _run_feedback_collection, _run_feedback_collection],
     Phase.SCALE:     [_run_execution_cycle, _run_feedback_collection, _run_scaling, _run_scaling],
 }
@@ -270,6 +281,7 @@ def run() -> None:
                     "_run_execution_cycle":    "execution_cycle_worker",
                     "_run_feedback_collection": "feedback_collection_worker",
                     "_run_scaling":            "scaling_worker",
+                    "_run_simulation":         "simulation_worker",
                 }.get(worker_fn.__name__, worker_fn.__name__)
                 try:
                     from backend.runtime.task_inventory import task_registry as _tr
