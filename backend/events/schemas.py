@@ -16,6 +16,10 @@ continues to work without changes.
 """
 from __future__ import annotations
 
+# ── schema version — increment on breaking payload changes ───────────────────
+
+EVENT_VERSION = 1
+
 # ── canonical dotted event types ─────────────────────────────────────────────
 
 ORCHESTRATOR_TICK    = "orchestrator.tick"
@@ -28,6 +32,9 @@ WORKER_HEALTH        = "worker.health"
 RUNTIME_SNAPSHOT     = "runtime.snapshot"
 TASK_INVENTORY       = "task_inventory"      # kept as-is — frontend matches this
 DECISION_LOGGED      = "decision.logged"
+METRICS_INGESTED     = "metrics.ingested"    # engagement/retention/campaign metrics
+HEARTBEAT            = "heartbeat"           # periodic runtime liveness signal
+RUNTIME_CONSISTENCY  = "runtime.consistency" # validation failures / drift warnings
 
 # ── legacy aliases (frontend still uses these; keep until frontend migrated) ──
 
@@ -70,3 +77,14 @@ LEGACY_SNAPSHOT = "snapshot"  # existing frontend handles this
 # DECISION_LOGGED:
 #   {"type": str, "product": str, "label": str, "roas": float,
 #    "hook": str, "angle": str, "ts": float}
+#
+# METRICS_INGESTED:
+#   {"type": str, "source": str, "metrics": dict, "ts": float}
+#   metrics dict may include: engagement_rate, retention_rate, ctr, cvr,
+#   spend, revenue, roas, views, likes, shares, comments, impressions
+#
+# HEARTBEAT:
+#   {"type": "heartbeat", "source": str, "ts": float}
+#
+# RUNTIME_CONSISTENCY:
+#   {"type": str, "issues": list[str], "source": str, "ts": float}

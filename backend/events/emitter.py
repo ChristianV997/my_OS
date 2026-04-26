@@ -134,3 +134,47 @@ def emit_decision(
         )
     except Exception as exc:
         _log.warning("emit_decision_failed error=%s", exc)
+
+
+def emit_metrics_ingested(
+    source: str,
+    metrics: dict[str, Any],
+) -> None:
+    """Emit a metrics.ingested event for engagement/retention/campaign data.
+
+    ``metrics`` is a free-form dict; common keys include engagement_rate,
+    retention_rate, ctr, cvr, spend, revenue, roas, views, likes, shares.
+    All metric values are routed through the standard event bus so they
+    appear in the replay log and can be consumed by any subscriber.
+    """
+    try:
+        _broker().emit_metrics_ingested(source=source, metrics=metrics)
+    except Exception as exc:
+        _log.warning("emit_metrics_ingested_failed source=%s error=%s", source, exc)
+
+
+def emit_heartbeat(source: str = "system") -> None:
+    """Emit a periodic runtime liveness signal.
+
+    Distinct from the WebSocket heartbeat frame — this is a broker event
+    that appears in the durable replay log, confirming the runtime is alive.
+    """
+    try:
+        _broker().emit_heartbeat(source=source)
+    except Exception as exc:
+        _log.warning("emit_heartbeat_failed error=%s", exc)
+
+
+def emit_runtime_consistency(
+    issues: list[str],
+    source: str = "runtime",
+) -> None:
+    """Emit a runtime.consistency event when validation detects drift.
+
+    ``issues`` is a list of human-readable problem descriptions.  An empty
+    list means the consistency check passed (still emitted as a confirmation).
+    """
+    try:
+        _broker().emit_runtime_consistency(issues=issues, source=source)
+    except Exception as exc:
+        _log.warning("emit_runtime_consistency_failed error=%s", exc)

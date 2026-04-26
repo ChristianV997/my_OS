@@ -31,6 +31,7 @@ from backend.events.schemas import (
     LEGACY_SNAPSHOT, LEGACY_TICK, LEGACY_WORKER, TASK_INVENTORY,
     ORCHESTRATOR_TICK, RUNTIME_SNAPSHOT, WORKER_HEALTH,
     SIGNALS_UPDATED, SIMULATION_COMPLETED, ANOMALY_DETECTED, DECISION_LOGGED,
+    METRICS_INGESTED, HEARTBEAT, RUNTIME_CONSISTENCY,
 )
 
 _log = logging.getLogger(__name__)
@@ -44,12 +45,24 @@ class EventEnvelope:
 
     ``payload`` is always the legacy event dict (has a ``type`` key) so it
     can be transmitted to existing WebSocket clients unchanged.
+
+    Fields
+    ------
+    event_id       — 12-char UUID hex, unique per event
+    type           — canonical dotted type string (e.g. "orchestrator.tick")
+    ts             — Unix timestamp (float)
+    source         — publisher identifier (orchestrator, api, simulation, …)
+    payload        — original event dict (preserved for wire compat)
+    event_version  — schema version (increment on breaking payload changes)
+    correlation_id — optional trace ID for linking related events
     """
-    event_id: str
-    type:     str
-    ts:       float
-    source:   str
-    payload:  dict[str, Any]
+    event_id:       str
+    type:           str
+    ts:             float
+    source:         str
+    payload:        dict[str, Any]
+    event_version:  int            = 1
+    correlation_id: str | None     = None
 
     def payload_json(self) -> str:
         """Return the payload as a JSON string (existing wire format)."""
@@ -58,10 +71,12 @@ class EventEnvelope:
     def envelope_json(self) -> str:
         """Return the full envelope as a JSON string (for debugging/logging)."""
         return json.dumps({
-            "event_id": self.event_id,
-            "type":     self.type,
-            "ts":       self.ts,
-            "source":   self.source,
+            "event_id":       self.event_id,
+            "type":           self.type,
+            "ts":             self.ts,
+            "source":         self.source,
+            "event_version":  self.event_version,
+            "correlation_id": self.correlation_id,
             **self.payload,
         }, default=str)
 
@@ -122,6 +137,7 @@ class PubSubBroker:
         event_type: str,
         payload: dict[str, Any],
         source: str = "system",
+        correlation_id: str | None = None,
     ) -> str:
         """Publish one event.  Returns the event_id.
 
@@ -134,6 +150,7 @@ class PubSubBroker:
             ts=payload.get("ts", time.time()),
             source=source,
             payload=payload,
+            correlation_id=correlation_id,
         )
         # push to Redis / in-memory stream (existing path — never change)
         try:
@@ -142,8 +159,16 @@ class PubSubBroker:
         except Exception as exc:
             _log.warning("broker_stream_publish_failed type=%s error=%s", event_type, exc)
 
-        # record in replay buffer for reconnecting clients
+        # record in in-process replay buffer (fast, lost on restart)
         self.replay.record(env)
+
+        # persist to durable replay store (survives restart, supports backtesting)
+        try:
+            from backend.runtime.replay_store import runtime_replay_store
+            runtime_replay_store.append(env)
+        except Exception as exc:
+            _log.warning("broker_replay_store_append_failed type=%s error=%s", event_type, exc)
+
         return env.event_id
 
     def consume(self, group: str = "ws", consumer: str = "c1") -> list[EventEnvelope]:
@@ -290,6 +315,41 @@ class PubSubBroker:
         payload.update({k: v for k, v in extra.items()
                         if isinstance(v, (int, float, str, bool))})
         return self.publish(DECISION_LOGGED, payload, source=source)
+
+    def emit_metrics_ingested(
+        self,
+        source: str,
+        metrics: dict[str, Any],
+    ) -> str:
+        payload = {
+            "type":    METRICS_INGESTED,
+            "source":  source,
+            "metrics": {k: v for k, v in metrics.items()
+                        if isinstance(v, (int, float, str, bool))},
+            "ts":      time.time(),
+        }
+        return self.publish(METRICS_INGESTED, payload, source=source)
+
+    def emit_heartbeat(self, source: str = "system") -> str:
+        payload = {
+            "type":   HEARTBEAT,
+            "source": source,
+            "ts":     time.time(),
+        }
+        return self.publish(HEARTBEAT, payload, source=source)
+
+    def emit_runtime_consistency(
+        self,
+        issues: list[str],
+        source: str = "runtime",
+    ) -> str:
+        payload = {
+            "type":   RUNTIME_CONSISTENCY,
+            "issues": issues,
+            "source": source,
+            "ts":     time.time(),
+        }
+        return self.publish(RUNTIME_CONSISTENCY, payload, source=source)
 
 
 # ── module-level singleton ─────────────────────────────────────────────────────

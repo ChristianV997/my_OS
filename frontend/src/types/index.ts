@@ -96,8 +96,44 @@ export interface TaskInventory {
   tasks: TaskRecord[];
 }
 
+export interface HeartbeatEvent {
+  type: "heartbeat";
+  source: string;
+  ts: number;
+}
+
+export interface MetricsIngestedEvent {
+  type: "metrics.ingested";
+  source: string;
+  metrics: Record<string, number | string | boolean>;
+  ts: number;
+}
+
+export interface RuntimeConsistencyEvent {
+  type: "runtime.consistency";
+  issues: string[];
+  source: string;
+  ts: number;
+}
+
+// Worker health — legacy "worker" and canonical "worker.health" both accepted
+export type WorkerEvent =
+  | { type: "worker";        worker: string; phase: string; status: string; ts: number }
+  | { type: "worker.health"; worker: string; phase: string; status: string; ts: number };
+
+// Tick — legacy "tick" and canonical "orchestrator.tick" both accepted
+export type TickEvent =
+  | { type: "tick";             phase: string; avg_roas: number; capital: number; win_rate?: number; ts: number }
+  | { type: "orchestrator.tick"; phase: string; avg_roas: number; capital: number; win_rate?: number; ts: number };
+
+// Snapshot — legacy "snapshot" and canonical "runtime.snapshot" both accepted
+export type SnapshotEvent = RuntimeSnapshot & { type: "snapshot" | "runtime.snapshot" };
+
 export type WsEvent =
-  | RuntimeSnapshot
-  | { type: "worker"; worker: string; phase: string; status: string; ts: number }
-  | { type: "tick"; phase: string; avg_roas: number; capital: number; ts: number }
-  | TaskInventory;
+  | SnapshotEvent
+  | WorkerEvent
+  | TickEvent
+  | TaskInventory
+  | HeartbeatEvent
+  | MetricsIngestedEvent
+  | RuntimeConsistencyEvent;

@@ -58,11 +58,12 @@ class WebSocketStream:
         except Exception:
             return
 
-        # ── 1. Hydrate client with recent events from replay buffer ─────────
-        replay_events = broker.replay.recent(n=self._replay_n)
-        for env in replay_events:
+        # ── 1. Hydrate client with recent events ────────────────────────────
+        # Prefer durable replay store (survives restarts) over in-process buffer.
+        replay_payloads = self._load_replay_payloads(broker)
+        for payload_json in replay_payloads:
             try:
-                await ws.send_text(env.payload_json())
+                await ws.send_text(payload_json)
             except Exception:
                 return   # client disconnected during replay
 
@@ -96,6 +97,26 @@ class WebSocketStream:
 
             if not envelopes:
                 await asyncio.sleep(self._idle_sleep_s)
+
+    def _load_replay_payloads(self, broker: Any) -> list[str]:
+        """Return recent event payloads as JSON strings for WS hydration.
+
+        Tries the durable RuntimeReplayStore first (survives process restarts).
+        Falls back to the in-process ReplayBuffer if the store is unavailable.
+        """
+        try:
+            from backend.runtime.replay_store import runtime_replay_store
+            rows = runtime_replay_store.recent(n=self._replay_n)
+            if rows:
+                return [
+                    json.dumps(r["payload"], default=str)
+                    for r in rows
+                    if r.get("payload")
+                ]
+        except Exception:
+            pass
+        # fallback: in-process buffer (lost on restart but always available)
+        return [env.payload_json() for env in broker.replay.recent(n=self._replay_n)]
 
 
 # ── module-level singleton ────────────────────────────────────────────────────
