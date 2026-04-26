@@ -1,134 +1,6 @@
 {
   "history": [
     {
-      "regime": "decay",
-      "params": {
-        "mutation_rate": 0.1,
-        "exploration_rate": 0.2
-      },
-      "improvement": 0.0
-    },
-    {
-      "regime": "volatile",
-      "params": {
-        "mutation_rate": 0.1,
-        "exploration_rate": 0.2
-      },
-      "improvement": -0.24292000000000002
-    },
-    {
-      "regime": "volatile",
-      "params": {
-        "mutation_rate": 0.1,
-        "exploration_rate": 0.2
-      },
-      "improvement": 0.39124000000000003
-    },
-    {
-      "regime": "decay",
-      "params": {
-        "mutation_rate": 0.1,
-        "exploration_rate": 0.2
-      },
-      "improvement": -0.09192
-    },
-    {
-      "regime": "volatile",
-      "params": {
-        "mutation_rate": 0.1,
-        "exploration_rate": 0.2
-      },
-      "improvement": 0.5818400000000001
-    },
-    {
-      "regime": "volatile",
-      "params": {
-        "mutation_rate": 0.1,
-        "exploration_rate": 0.2
-      },
-      "improvement": -0.5193800000000002
-    },
-    {
-      "regime": "volatile",
-      "params": {
-        "mutation_rate": 0.1,
-        "exploration_rate": 0.2
-      },
-      "improvement": -0.13925999999999994
-    },
-    {
-      "regime": "volatile",
-      "params": {
-        "mutation_rate": 0.1,
-        "exploration_rate": 0.2
-      },
-      "improvement": -0.6732400000000001
-    },
-    {
-      "regime": "decay",
-      "params": {
-        "mutation_rate": 0.1,
-        "exploration_rate": 0.2
-      },
-      "improvement": 0.59128
-    },
-    {
-      "regime": "volatile",
-      "params": {
-        "mutation_rate": 0.1,
-        "exploration_rate": 0.2
-      },
-      "improvement": -0.67114
-    },
-    {
-      "regime": "volatile",
-      "params": {
-        "mutation_rate": 0.1,
-        "exploration_rate": 0.2
-      },
-      "improvement": 0.74584
-    },
-    {
-      "regime": "volatile",
-      "params": {
-        "mutation_rate": 0.1,
-        "exploration_rate": 0.2
-      },
-      "improvement": -0.050799999999999956
-    },
-    {
-      "regime": "growth",
-      "params": {
-        "mutation_rate": 0.1,
-        "exploration_rate": 0.2
-      },
-      "improvement": 0.7072799999999999
-    },
-    {
-      "regime": "volatile",
-      "params": {
-        "mutation_rate": 0.1,
-        "exploration_rate": 0.2
-      },
-      "improvement": -0.06743999999999972
-    },
-    {
-      "regime": "volatile",
-      "params": {
-        "mutation_rate": 0.1,
-        "exploration_rate": 0.2
-      },
-      "improvement": -0.5968200000000001
-    },
-    {
-      "regime": "volatile",
-      "params": {
-        "mutation_rate": 0.1,
-        "exploration_rate": 0.2
-      },
-      "improvement": -0.19178000000000006
-    },
-    {
       "regime": "volatile",
       "params": {
         "mutation_rate": 0.1,
@@ -1599,36 +1471,164 @@
         "exploration_rate": 0.2
       },
       "improvement": -0.5890800000000003
+    },
+    {
+      "regime": "growth",
+      "params": {
+        "mutation_rate": 0.1,
+        "exploration_rate": 0.2
+      },
+      "improvement": 0.0
+    },
+    {
+      "regime": "volatile",
+      "params": {
+        "mutation_rate": 0.1,
+        "exploration_rate": 0.2
+      },
+      "improvement": 0.10794000000000015
+    },
+    {
+      "regime": "volatile",
+      "params": {
+        "mutation_rate": 0.1,
+        "exploration_rate": 0.2
+      },
+      "improvement": -1.04028
+    },
+    {
+      "regime": "stable",
+      "params": {
+        "mutation_rate": 0.1,
+        "exploration_rate": 0.2
+      },
+      "improvement": -0.77902
+    },
+    {
+      "regime": "volatile",
+      "params": {
+        "mutation_rate": 0.1,
+        "exploration_rate": 0.2
+      },
+      "improvement": 1.62138
+    },
+    {
+      "regime": "volatile",
+      "params": {
+        "mutation_rate": 0.1,
+        "exploration_rate": 0.2
+      },
+      "improvement": -1.38816
+    },
+    {
+      "regime": "stable",
+      "params": {
+        "mutation_rate": 0.1,
+        "exploration_rate": 0.2
+      },
+      "improvement": -0.12205999999999995
+    },
+    {
+      "regime": "volatile",
+      "params": {
+        "mutation_rate": 0.1,
+        "exploration_rate": 0.2
+      },
+      "improvement": 0.8219399999999999
+    },
+    {
+      "regime": "decay",
+      "params": {
+        "mutation_rate": 0.1,
+        "exploration_rate": 0.2
+      },
+      "improvement": -0.41749999999999987
+    },
+    {
+      "regime": "volatile",
+      "params": {
+        "mutation_rate": 0.1,
+        "exploration_rate": 0.2
+      },
+      "improvement": 0.8620200000000001
+    },
+    {
+      "regime": "stable",
+      "params": {
+        "mutation_rate": 0.1,
+        "exploration_rate": 0.2
+      },
+      "improvement": -1.4242800000000002
+    },
+    {
+      "regime": "volatile",
+      "params": {
+        "mutation_rate": 0.1,
+        "exploration_rate": 0.2
+      },
+      "improvement": 0.7587600000000001
+    },
+    {
+      "regime": "volatile",
+      "params": {
+        "mutation_rate": 0.1,
+        "exploration_rate": 0.2
+      },
+      "improvement": 0.27674
+    },
+    {
+      "regime": "decay",
+      "params": {
+        "mutation_rate": 0.1,
+        "exploration_rate": 0.2
+      },
+      "improvement": -0.33288000000000006
+    },
+    {
+      "regime": "volatile",
+      "params": {
+        "mutation_rate": 0.1,
+        "exploration_rate": 0.2
+      },
+      "improvement": 1.0522200000000004
+    },
+    {
+      "regime": "volatile",
+      "params": {
+        "mutation_rate": 0.1,
+        "exploration_rate": 0.2
+      },
+      "improvement": -0.24778000000000033
     }
   ],
   "best": {
-    "decay": {
-      "params": {
-        "exploration_rate": 0.2,
-        "mutation_rate": 0.1
-      },
-      "score": -0.6926329999999999
-    },
     "volatile": {
       "params": {
         "exploration_rate": 0.2,
         "mutation_rate": 0.1
       },
-      "score": 0.007358068965517231
+      "score": 0.0372416783216783
     },
     "growth": {
       "params": {
         "exploration_rate": 0.2,
         "mutation_rate": 0.1
       },
-      "score": 0.6081364285714285
+      "score": 0.5828764285714286
+    },
+    "decay": {
+      "params": {
+        "exploration_rate": 0.2,
+        "mutation_rate": 0.1
+      },
+      "score": -0.7948631578947367
     },
     "stable": {
       "params": {
         "exploration_rate": 0.2,
         "mutation_rate": 0.1
       },
-      "score": -0.6935657142857143
+      "score": -0.7180320000000001
     }
   }
 }
