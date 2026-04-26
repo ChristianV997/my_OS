@@ -8,8 +8,9 @@ import { PlaybookPanel } from "./components/PlaybookPanel";
 import { DecisionLog } from "./components/DecisionLog";
 import { AgentStatus } from "./components/AgentStatus";
 import { TaskInventoryPanel } from "./components/TaskInventoryPanel";
+import { SimulationPanel } from "./components/SimulationPanel";
 
-const TABS = ["Overview", "Tasks"] as const;
+const TABS = ["Overview", "Simulation", "Tasks"] as const;
 type Tab = typeof TABS[number];
 
 export default function App() {
@@ -59,6 +60,12 @@ export default function App() {
                 patterns={snapshot?.patterns ?? { hook_scores: {}, angle_scores: {}, regime_scores: {}, top_hooks: [], top_angles: [] }}
               />
             </div>
+          </div>
+        )}
+
+        {tab === "Simulation" && (
+          <div className="max-w-6xl mx-auto space-y-4">
+            <SimulationPanel scores={snapshot?.simulation_scores ?? []} />
           </div>
         )}
 

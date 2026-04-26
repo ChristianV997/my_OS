@@ -1,3 +1,18 @@
+export interface SimulationScore {
+  product: string;
+  hook: string;
+  angle: string;
+  predicted_engagement: number;
+  predicted_roas: number;
+  predicted_ctr: number;
+  corrected_roas: number;
+  confidence: number;
+  risk_score: number;
+  rank_score: number;
+  rank: number;
+  ts: number;
+}
+
 export interface RuntimeSnapshot {
   ts: number;
   type: string;
@@ -13,6 +28,7 @@ export interface RuntimeSnapshot {
   patterns: Patterns;
   recent_decisions: Decision[];
   worker_status: Record<string, unknown>;
+  simulation_scores: SimulationScore[];
 }
 
 export interface Signal {

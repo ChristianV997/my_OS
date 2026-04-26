@@ -61,6 +61,13 @@ from backend.agents.structural_evolution import structural_engine
 STATE_PATH = os.getenv("STATE_PATH", "state/state.db")
 _CYCLES_PER_MINUTE = max(1, int(os.getenv("CYCLES_PER_MINUTE", "10")))
 
+# When ORCHESTRATOR_HANDLES_CYCLES=true the background runner skips run_cycle()
+# and only publishes the current snapshot. Set this when orchestrator/main.py
+# is deployed alongside the API to prevent double-execution of the same state.
+_ORCHESTRATOR_HANDLES_CYCLES = (
+    os.getenv("ORCHESTRATOR_HANDLES_CYCLES", "false").lower() == "true"
+)
+
 # ── app ───────────────────────────────────────────────────────────────────────
 
 app = FastAPI(title="MarketOS v4", version="4.0.0")
@@ -96,12 +103,19 @@ def _background_runner():
     while _bg_running:
         t0 = time.time()
         try:
-            new_state = run_cycle(_state)   # compute outside lock
-            with _lock:
-                _state = new_state
-                _last_cycle_at = time.time()
+            if not _ORCHESTRATOR_HANDLES_CYCLES:
+                # sole runner: execute the full cycle and update shared state
+                new_state = run_cycle(_state)   # compute outside lock
+                with _lock:
+                    _state = new_state
+                    _last_cycle_at = time.time()
+            else:
+                # orchestrator is the cycle driver; just read current state
+                with _lock:
+                    new_state = _state
+
             # Prometheus instrumentation
-            if _PROMETHEUS_OK:
+            if _PROMETHEUS_OK and not _ORCHESTRATOR_HANDLES_CYCLES:
                 elapsed = time.time() - t0
                 _prom_cycles.inc()
                 _prom_capital.set(new_state.capital)

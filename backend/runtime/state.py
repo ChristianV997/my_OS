@@ -34,6 +34,8 @@ class RuntimeSnapshot:
     recent_decisions: list[dict[str, Any]] = field(default_factory=list)
     # worker health from last orchestrator tick
     worker_status: dict[str, Any] = field(default_factory=dict)
+    # simulation layer: ranked candidates from most recent score_signals() run
+    simulation_scores: list[dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -86,6 +88,19 @@ def build_snapshot(state: Any, phase: str = "RESEARCH") -> RuntimeSnapshot:
     # Recent decisions
     recent_decisions = rows[-10:]
 
+    # Simulation scores — rank top signals pre-execution
+    simulation_scores: list[dict] = []
+    try:
+        from simulation.engine import simulation_engine
+        ranked = simulation_engine.score_signals(
+            top_signals[:10],
+            patterns=patterns,
+            playbooks={p["product"]: p for p in top_playbooks},
+        )
+        simulation_scores = [r.to_dict() for r in ranked[:8]]
+    except Exception:
+        pass
+
     return RuntimeSnapshot(
         cycle=state.total_cycles,
         phase=phase,
@@ -98,4 +113,5 @@ def build_snapshot(state: Any, phase: str = "RESEARCH") -> RuntimeSnapshot:
         top_playbooks=top_playbooks,
         patterns=patterns,
         recent_decisions=recent_decisions,
+        simulation_scores=simulation_scores,
     )
