@@ -3,7 +3,9 @@
 Provides ``_run_simulation()`` — a drop-in orchestrator worker that:
 1. Warms up the scoring model from recent event history
 2. Scores current signals
-3. Records outcomes from the most recent completed cycle back into calibration
+3. Records recent outcomes back into calibration (prediction-vs-reality)
+4. Records predictions for the scored signals so outcomes can be matched later
+5. Emits ``simulation.completed`` event via the canonical broker
 
 Also re-exports ``simulation_engine`` for use from ``backend/api.py``.
 """
@@ -20,17 +22,15 @@ from simulation.engine import simulation_engine  # noqa: F401
 
 
 def _run_simulation() -> dict[str, Any]:
-    """Orchestrator worker: warm up, score signals, record recent outcomes.
-
-    Returns a status dict compatible with the existing worker dispatch table.
-    """
+    """Orchestrator worker: warm up, score signals, record recent outcomes."""
     try:
         from simulation.engine import simulation_engine as _engine
+        from simulation.calibration import calibration_store
         from core.content.patterns import pattern_store
         from core.content.playbook import playbook_memory
         from core.signals import signal_engine as _sig_engine
 
-        # Pull context
+        # ── pull context ──────────────────────────────────────────────────────
         try:
             patterns = pattern_store.get_patterns()
         except Exception:
@@ -41,7 +41,6 @@ def _run_simulation() -> dict[str, Any]:
         except Exception:
             all_playbooks = {}
 
-        # Get recent event rows for warm-up and outcome recording
         rows: list[dict] = []
         try:
             from backend.api import _state  # type: ignore[attr-defined]
@@ -49,28 +48,34 @@ def _run_simulation() -> dict[str, Any]:
         except Exception:
             pass
 
-        # Warm up / retrain if we have data
+        # ── warm up / retrain ─────────────────────────────────────────────────
         warm_ok = False
         if rows:
             warm_ok = _engine.warm_up(rows, patterns=patterns, playbooks=all_playbooks)
 
-        # Record recent outcomes into calibration
+        # ── record outcomes into calibration audit trail ───────────────────────
+        # For each recent row that has an actual ROAS, try to match a pending
+        # prediction. Also call the engine's own calibration path.
         outcomes_recorded = 0
         for row in rows[-20:]:
             product = row.get("product", "")
-            pred = row.get("predicted_roas", row.get("roas", 0.0))
-            actual = row.get("roas", 0.0)
-            if product and actual:
-                _engine.record_outcome(product, float(pred), float(actual), event=row)
-                outcomes_recorded += 1
+            actual  = float(row.get("roas", 0.0) or 0.0)
+            if not product or not actual:
+                continue
+            pred = float(row.get("predicted_roas", actual))
+            # calibration audit store (prediction-vs-reality pairs)
+            calibration_store.record(product, pred, actual, ts=row.get("ts"))
+            # engine-level calibration (Bayesian bias corrector)
+            _engine.record_outcome(product, pred, actual, event=row)
+            outcomes_recorded += 1
 
-        # Score current signal candidates
+        # ── score current signal candidates ───────────────────────────────────
         try:
             signals = _sig_engine.get()
         except Exception:
             signals = []
 
-        ranked = []
+        ranked: list[Any] = []
         if signals:
             ranked = _engine.score_signals(
                 signals,
@@ -78,13 +83,28 @@ def _run_simulation() -> dict[str, Any]:
                 playbooks=all_playbooks,
             )
 
+        # Stage predictions in calibration store so future outcomes can be paired
+        for r in ranked:
+            if r.product:
+                calibration_store.record_prediction(r.product, r.predicted_roas)
+
+        # ── emit simulation.completed event ───────────────────────────────────
+        top_product = ranked[0].product if ranked else None
+        scores_dicts = [r.to_dict() for r in ranked[:10]]
+        try:
+            from backend.events.emitter import emit_simulation_completed
+            emit_simulation_completed(scores_dicts, top_product=top_product)
+        except Exception:
+            pass
+
         return {
-            "status": "ok",
-            "warmed_up": warm_ok,
-            "signals_scored": len(ranked),
+            "status":           "ok",
+            "warmed_up":        warm_ok,
+            "signals_scored":   len(ranked),
             "outcomes_recorded": outcomes_recorded,
-            "top_product": ranked[0].product if ranked else None,
-            "top_rank_score": round(ranked[0].rank_score, 4) if ranked else None,
+            "top_product":      top_product,
+            "top_rank_score":   round(ranked[0].rank_score, 4) if ranked else None,
+            "calibrated":       calibration_store.is_calibrated(),
         }
 
     except Exception as exc:

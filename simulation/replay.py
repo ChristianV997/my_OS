@@ -39,16 +39,22 @@ class ReplayStore:
     def __init__(self, db_path: str = ":memory:"):
         self._lock = threading.Lock()
         self._db_path = db_path
-        self._conn = None
+        self._conn = None  # lazy — initialized on first use
         self._insert_count = 0
+
+    def _ensure_init(self) -> None:
+        """Lazy init — called before first DB operation."""
+        if self._conn is not None:
+            return
         self._init()
 
     def _init(self) -> None:
         try:
             import duckdb
             with self._lock:
-                self._conn = duckdb.connect(self._db_path)
-                self._conn.execute(_CREATE_SQL)
+                if self._conn is None:
+                    self._conn = duckdb.connect(self._db_path)
+                    self._conn.execute(_CREATE_SQL)
         except Exception as exc:
             _log.warning("replay_store_init_failed error=%s fallback=list", exc)
             self._conn = None
@@ -61,6 +67,7 @@ class ReplayStore:
         """Bulk-insert event rows. Returns count inserted."""
         if not rows:
             return 0
+        self._ensure_init()
         if self._conn is None:
             return 0
 
@@ -175,6 +182,7 @@ class ReplayStore:
     # ------------------------------------------------------------------
 
     def _query(self, sql: str, params: list) -> list[dict]:
+        self._ensure_init()
         if self._conn is None:
             return []
         with self._lock:

@@ -150,6 +150,50 @@ def _run_simulation() -> dict[str, Any]:
         return {"status": "error", "error": str(exc)}
 
 
+# ── worker retry + anomaly ────────────────────────────────────────────────────
+
+# Track consecutive error counts per worker to gate anomaly emission
+_worker_error_counts: dict[str, int] = {}
+_ANOMALY_THRESHOLD = 2   # emit anomaly after this many consecutive errors
+
+
+def _with_retry(fn: Any, attempts: int = 2) -> dict[str, Any]:
+    """Run worker fn up to ``attempts`` times.
+
+    - Returns first ``ok`` or ``skipped`` result immediately.
+    - On repeated ``error`` status, emits an ``anomaly.detected`` event.
+    - Never raises — always returns a status dict.
+    """
+    last_result: dict[str, Any] = {"status": "error", "error": "no_attempts"}
+    for attempt in range(attempts):
+        try:
+            last_result = fn()
+        except Exception as exc:
+            last_result = {"status": "error", "error": str(exc)}
+        if last_result.get("status") in ("ok", "skipped"):
+            _worker_error_counts[fn.__name__] = 0
+            return last_result
+        # error path — wait a beat before retry (only if there are more attempts)
+        if attempt < attempts - 1:
+            time.sleep(0.5)
+
+    # all attempts failed
+    count = _worker_error_counts.get(fn.__name__, 0) + 1
+    _worker_error_counts[fn.__name__] = count
+    if count >= _ANOMALY_THRESHOLD:
+        try:
+            from backend.events.emitter import emit_anomaly
+            emit_anomaly(
+                level="error",
+                message=f"worker_repeated_failure fn={fn.__name__} "
+                        f"consecutive={count} error={last_result.get('error', '')}",
+                source="orchestrator",
+            )
+        except Exception:
+            pass
+    return last_result
+
+
 # ── phase dispatch table ───────────────────────────────────────────────────────
 
 _PHASE_WORKERS: dict[Phase, list[Any]] = {
@@ -255,7 +299,7 @@ def run() -> None:
                 pass
 
             for worker_fn in _PHASE_WORKERS.get(phase, []):
-                result = worker_fn()
+                result = _with_retry(worker_fn)
                 _record_worker(worker_fn.__name__)
                 if result.get("status") not in ("ok", "skipped"):
                     _log.warning("worker_error worker=%s result=%s", worker_fn.__name__, result)

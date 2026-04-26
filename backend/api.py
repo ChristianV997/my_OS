@@ -1175,6 +1175,27 @@ def simulation_report():
         return {"error": str(exc)}
 
 
+@app.get("/simulation/calibration")
+def simulation_calibration():
+    """Return prediction-vs-reality calibration audit (MAE, RMSE, bias, per-product)."""
+    try:
+        from simulation.calibration import calibration_store
+        return calibration_store.summary()
+    except Exception as exc:
+        return {"error": str(exc)}
+
+
+@app.get("/runtime/state")
+def runtime_state():
+    """Return full canonical RuntimeState as JSON."""
+    try:
+        from backend.runtime.state import build_runtime_state
+        rs = build_runtime_state(_state)
+        return rs.to_dict()
+    except Exception as exc:
+        return {"error": str(exc)}
+
+
 # ── WebSocket live event stream ────────────────────────────────────────────────
 
 try:

@@ -83,13 +83,18 @@ class PatternStore:
 
     def get_patterns(self) -> dict:
         with self._lock:
-            return {
-                "hook_scores":   dict(self._hook_scores),
-                "angle_scores":  dict(self._angle_scores),
-                "regime_scores": dict(self._regime_scores),
-                "top_hooks":     self.get_top_hooks(),
-                "top_angles":    self.get_top_angles(),
-            }
+            hook_scores   = dict(self._hook_scores)
+            angle_scores  = dict(self._angle_scores)
+            regime_scores = dict(self._regime_scores)
+        top_hooks  = sorted(hook_scores,  key=lambda k: -hook_scores[k])
+        top_angles = sorted(angle_scores, key=lambda k: -angle_scores[k])
+        return {
+            "hook_scores":   hook_scores,
+            "angle_scores":  angle_scores,
+            "regime_scores": regime_scores,
+            "top_hooks":     top_hooks,
+            "top_angles":    top_angles,
+        }
 
 
 pattern_store = PatternStore()
