@@ -111,6 +111,20 @@ def _background_runner():
                 regime = new_state.detected_regime or "unknown"
                 _prom_regime.labels(regime=regime).set(1)
                 _prom_cycle_time.observe(elapsed)
+            # Publish full snapshot to live event stream (WebSocket clients)
+            try:
+                from core.stream import publish as _stream_pub
+                from backend.runtime.state import build_snapshot
+                snap = build_snapshot(new_state)
+                _stream_pub(snap.to_dict())
+            except Exception:
+                pass
+            try:
+                from backend.runtime.task_inventory import task_registry as _tr
+                _tr.heartbeat("background_runner", status="ok")
+                _tr.heartbeat("sw_runtime_snapshot", status="ok")
+            except Exception:
+                pass
         except Exception:
             _api_log.exception("background runner cycle error")
         time.sleep(sleep_s)
@@ -141,6 +155,11 @@ def _research_runner():
                     pass
         except Exception:
             _api_log.exception("research runner error")
+        try:
+            from backend.runtime.task_inventory import task_registry as _tr
+            _tr.heartbeat("research_runner", status="ok")
+        except Exception:
+            pass
         time.sleep(300)  # check every 5 minutes
 
 
@@ -155,12 +174,22 @@ async def _startup():
     _bg_running = True
     threading.Thread(target=_background_runner, daemon=True).start()
     threading.Thread(target=_research_runner, daemon=True).start()
+    try:
+        from backend.runtime.task_inventory import start_heartbeat_broadcaster
+        start_heartbeat_broadcaster(interval_s=30.0)
+    except Exception:
+        pass
 
 
 @app.on_event("shutdown")
 async def _shutdown():
     global _bg_running
     _bg_running = False
+    try:
+        from backend.runtime.task_inventory import stop_heartbeat_broadcaster
+        stop_heartbeat_broadcaster()
+    except Exception:
+        pass
     from backend.core.serializer import save
     try:
         save(_state, STATE_PATH)
@@ -535,13 +564,6 @@ def macro():
         return {"error": "macro signals unavailable"}
 
 
-@app.get("/portfolio")
-def portfolio():
-    """ROAS-weighted portfolio allocation across active product variants."""
-    from backend.decision.portfolio_engine import top_products
-    return top_products(n=10)
-
-
 @app.get("/replay_buffer")
 def replay_buffer_stats():
     """Replay buffer size and readiness."""
@@ -559,6 +581,33 @@ def bandit_status():
     from backend.learning.contextual_bandit import bandit_instance
     b = bandit_instance()
     return {"arms": b.arms, "alpha": b.alpha}
+
+
+@app.get("/snapshot")
+def snapshot():
+    """Full runtime snapshot — used by dashboard on initial load before WS connects."""
+    try:
+        from backend.runtime.state import build_snapshot
+        with _lock:
+            snap = build_snapshot(_state)
+        return snap.to_dict()
+    except Exception as exc:
+        return {"error": str(exc)}
+
+
+@app.get("/runtime/tasks")
+def runtime_tasks():
+    """Live task inventory: all loops, schedulers, Celery tasks, queues, WS emitters,
+    and state writers with their current status and heartbeat timestamps."""
+    try:
+        from backend.runtime.task_inventory import task_registry
+        return {
+            "summary": task_registry.summary(),
+            "live_threads": task_registry.live_threads(),
+            "tasks": task_registry.all(),
+        }
+    except Exception as exc:
+        return {"error": str(exc)}
 
 
 @app.get("/playbook")
@@ -1023,3 +1072,67 @@ def prediction_errors(limit: int = Query(default=100, ge=1, le=500)):
         "calibration": stats,
         "total_updates": _wm_calibrator.total_updates,
     }
+
+
+# ── TikTok Ads endpoints ─────────────────────────────────────────────────────
+
+@app.post("/tiktok/launch")
+def tiktok_launch(product: str, phase: str = "EXPLORE"):
+    """Launch a TikTok campaign from the best playbook for this product.
+    Safe: defaults to dry-run mode. Set TIKTOK_DRY_RUN=false to go live.
+    """
+    try:
+        from backend.integrations.tiktok_ads import launch_from_playbook
+        from core.content.playbook import playbook_memory
+        pb = playbook_memory.get(product)
+        if not pb:
+            return {"status": "error", "reason": "no_playbook", "product": product}
+        return launch_from_playbook(vars(pb), phase=phase)
+    except Exception as exc:
+        return {"status": "error", "error": str(exc)}
+
+
+@app.get("/tiktok/roas")
+def tiktok_roas_report():
+    """Fetch latest ROAS from TikTok reporting API (or simulated in dry-run)."""
+    try:
+        from backend.integrations.tiktok_ads import fetch_roas
+        # Real: pull active campaign IDs from portfolio engine
+        try:
+            from backend.decision.portfolio_engine import top_products
+            products = top_products(n=10)
+            cids = [str(p.get("product_id", "")) for p in products if p.get("product_id")]
+        except Exception:
+            cids = []
+        if not cids:
+            cids = ["demo_campaign"]
+        roas_map = fetch_roas(cids)
+        return {"roas": roas_map, "campaign_count": len(cids)}
+    except Exception as exc:
+        return {"error": str(exc)}
+
+
+@app.post("/tiktok/check")
+def tiktok_check_and_act(campaign_id: str, spend: float, budget: float, roas: float):
+    """Run anomaly check on a campaign: kill if overspend+bad ROAS, scale if win streak."""
+    try:
+        from backend.integrations.tiktok_ads import check_and_act
+        action = check_and_act(campaign_id, spend, budget, roas)
+        return {"campaign_id": campaign_id, "action": action}
+    except Exception as exc:
+        return {"error": str(exc)}
+
+
+# ── WebSocket live event stream ────────────────────────────────────────────────
+
+try:
+    from fastapi import WebSocket as _WebSocket
+    from api.ws import event_stream as _ws_event_stream
+
+    @app.websocket("/ws")
+    async def websocket_endpoint(ws: _WebSocket):
+        """Live event stream. Pushes cycle/signal/worker/feedback events as JSON frames."""
+        await _ws_event_stream(ws)
+
+except ImportError:
+    pass

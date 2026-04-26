@@ -1,0 +1,87 @@
+export interface RuntimeSnapshot {
+  ts: number;
+  type: string;
+  cycle: number;
+  phase: "RESEARCH" | "EXPLORE" | "VALIDATE" | "SCALE";
+  capital: number;
+  avg_roas: number;
+  win_rate: number;
+  regime: string;
+  signal_count: number;
+  top_signals: Signal[];
+  top_playbooks: Playbook[];
+  patterns: Patterns;
+  recent_decisions: Decision[];
+  worker_status: Record<string, unknown>;
+}
+
+export interface Signal {
+  product: string;
+  score: number;
+  source: string;
+  velocity?: number;
+  platform?: string;
+  category?: string;
+}
+
+export interface Playbook {
+  product: string;
+  phase: string;
+  top_hooks: string[];
+  top_angles: string[];
+  estimated_roas: number;
+  confidence: number;
+  evidence_count: number;
+  created_at: number;
+}
+
+export interface Patterns {
+  hook_scores: Record<string, number>;
+  angle_scores: Record<string, number>;
+  regime_scores: Record<string, number>;
+  top_hooks: string[];
+  top_angles: string[];
+}
+
+export interface Decision {
+  roas?: number;
+  ctr?: number;
+  cvr?: number;
+  variant?: string | number;
+  hook?: string;
+  angle?: string;
+  env_regime?: string;
+  label?: string;
+  eng_score?: number;
+  capital?: number;
+  cost?: number;
+  revenue?: number;
+}
+
+export interface TaskRecord {
+  name: string;
+  kind: "thread" | "celery" | "scheduler" | "ws" | "state_writer" | "queue" | "loop" | "unknown";
+  description: string;
+  module: string;
+  interval_s: number | null;
+  last_run_ts: number | null;
+  last_status: string;
+  run_count: number;
+  active: boolean;
+  configured: boolean;
+  next_run_ts: number | null;
+  age_s: number | null;
+}
+
+export interface TaskInventory {
+  type: "task_inventory";
+  ts: number;
+  summary: { total: number; active: number; idle: number; unconfigured: number; by_kind: Record<string, number> };
+  tasks: TaskRecord[];
+}
+
+export type WsEvent =
+  | RuntimeSnapshot
+  | { type: "worker"; worker: string; phase: string; status: string; ts: number }
+  | { type: "tick"; phase: string; avg_roas: number; capital: number; ts: number }
+  | TaskInventory;

@@ -226,12 +226,56 @@ def run() -> None:
                 metrics.get("avg_roas"),
                 metrics.get("capital"),
             )
+            try:
+                from core.stream import publish as _pub
+                _pub({
+                    "type":      "tick",
+                    "phase":     phase.value,
+                    "avg_roas":  metrics.get("avg_roas"),
+                    "capital":   metrics.get("capital"),
+                    "win_rate":  metrics.get("win_rate"),
+                    "signal_count": metrics.get("signal_count"),
+                    "ts":        time.time(),
+                })
+            except Exception:
+                pass
+            try:
+                from backend.runtime.task_inventory import task_registry as _tr
+                _tr.heartbeat("orchestrator_tick", status="ok")
+            except Exception:
+                pass
 
             for worker_fn in _PHASE_WORKERS.get(phase, []):
                 result = worker_fn()
                 _record_worker(worker_fn.__name__)
                 if result.get("status") not in ("ok", "skipped"):
                     _log.warning("worker_error worker=%s result=%s", worker_fn.__name__, result)
+                # Publish worker event to live stream
+                try:
+                    from core.stream import publish as _pub
+                    _pub({
+                        "type":   "worker",
+                        "worker": worker_fn.__name__,
+                        "phase":  phase.value,
+                        "status": result.get("status"),
+                        "ts":     time.time(),
+                        **{k: v for k, v in result.items()
+                           if k not in ("status", "error") and isinstance(v, (int, float, str))},
+                    })
+                except Exception:
+                    pass
+                # Heartbeat task inventory
+                _worker_task = {
+                    "_run_signal_ingestion":   "signal_ingestion_worker",
+                    "_run_execution_cycle":    "execution_cycle_worker",
+                    "_run_feedback_collection": "feedback_collection_worker",
+                    "_run_scaling":            "scaling_worker",
+                }.get(worker_fn.__name__, worker_fn.__name__)
+                try:
+                    from backend.runtime.task_inventory import task_registry as _tr
+                    _tr.heartbeat(_worker_task, status=result.get("status", "ok"))
+                except Exception:
+                    pass
 
         except (KeyboardInterrupt, SystemExit):
             _log.info("orchestrator_stopping")
