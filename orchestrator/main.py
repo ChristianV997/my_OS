@@ -238,16 +238,14 @@ def run() -> None:
                 metrics.get("capital"),
             )
             try:
-                from core.stream import publish as _pub
-                _pub({
-                    "type":      "tick",
-                    "phase":     phase.value,
-                    "avg_roas":  metrics.get("avg_roas"),
-                    "capital":   metrics.get("capital"),
-                    "win_rate":  metrics.get("win_rate"),
-                    "signal_count": metrics.get("signal_count"),
-                    "ts":        time.time(),
-                })
+                from backend.events.emitter import emit_tick as _emit_tick
+                _emit_tick(
+                    phase=phase.value,
+                    avg_roas=metrics.get("avg_roas", 0.0),
+                    capital=metrics.get("capital", 0.0),
+                    win_rate=metrics.get("win_rate", 0.0),
+                    signal_count=metrics.get("signal_count", 0),
+                )
             except Exception:
                 pass
             try:
@@ -261,18 +259,17 @@ def run() -> None:
                 _record_worker(worker_fn.__name__)
                 if result.get("status") not in ("ok", "skipped"):
                     _log.warning("worker_error worker=%s result=%s", worker_fn.__name__, result)
-                # Publish worker event to live stream
+                # Publish worker event via canonical emitter
                 try:
-                    from core.stream import publish as _pub
-                    _pub({
-                        "type":   "worker",
-                        "worker": worker_fn.__name__,
-                        "phase":  phase.value,
-                        "status": result.get("status"),
-                        "ts":     time.time(),
-                        **{k: v for k, v in result.items()
-                           if k not in ("status", "error") and isinstance(v, (int, float, str))},
-                    })
+                    from backend.events.emitter import emit_worker_health as _emit_wh
+                    extra = {k: v for k, v in result.items()
+                             if k not in ("status", "error") and isinstance(v, (int, float, str))}
+                    _emit_wh(
+                        worker=worker_fn.__name__,
+                        status=result.get("status", "ok"),
+                        phase=phase.value,
+                        **extra,
+                    )
                 except Exception:
                     pass
                 # Heartbeat task inventory

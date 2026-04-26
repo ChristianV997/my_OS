@@ -379,10 +379,14 @@ def start_heartbeat_broadcaster(interval_s: float = 30.0) -> None:
     def _loop() -> None:
         while _hb_running:
             try:
-                from core.stream import publish
-                publish(task_registry.to_stream())
+                from backend.events.emitter import emit_task_inventory
+                emit_task_inventory(task_registry.to_stream())
             except Exception:
-                pass
+                try:
+                    from core.stream import publish
+                    publish(task_registry.to_stream())
+                except Exception:
+                    pass
             time.sleep(interval_s)
 
     _hb_thread = threading.Thread(target=_loop, name="task_inventory_hb", daemon=True)

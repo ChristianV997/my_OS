@@ -127,10 +127,10 @@ def _background_runner():
                 _prom_cycle_time.observe(elapsed)
             # Publish full snapshot to live event stream (WebSocket clients)
             try:
-                from core.stream import publish as _stream_pub
                 from backend.runtime.state import build_snapshot
+                from backend.events.emitter import emit_snapshot
                 snap = build_snapshot(new_state)
-                _stream_pub(snap.to_dict())
+                emit_snapshot(snap, source="api")
             except Exception:
                 pass
             try:
