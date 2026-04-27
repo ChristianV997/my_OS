@@ -17,6 +17,7 @@ import { InventoryOps } from "./InventoryOps";
 import { ClaudeStrategyFeed } from "./ClaudeStrategyFeed";
 import { ReplayInspector } from "./ReplayInspector";
 import { OperatorQuickActions } from "./OperatorQuickActions";
+import { DesktopWorkspace } from "./DesktopWorkspace";
 
 interface Props {
   snapshot: RuntimeSnapshot | null;
@@ -39,7 +40,6 @@ function getType(event: RuntimeEnvelope): string {
 
 function buildStats(events: RuntimeEnvelope[]): RuntimeStats {
   const replayHashes = new Set<string>();
-
   let deployments = 0;
   let successes = 0;
   let failures = 0;
@@ -59,17 +59,9 @@ function buildStats(events: RuntimeEnvelope[]): RuntimeStats {
       lastSequence = Math.max(lastSequence, event.sequence_id);
     }
 
-    if (type.includes("deploy")) {
-      deployments += 1;
-    }
-
-    if (type.includes("success")) {
-      successes += 1;
-    }
-
-    if (type.includes("fail")) {
-      failures += 1;
-    }
+    if (type.includes("deploy")) deployments += 1;
+    if (type.includes("success")) successes += 1;
+    if (type.includes("fail")) failures += 1;
 
     const payload = (event.payload || {}) as Record<string, unknown>;
 
@@ -123,24 +115,17 @@ export function CommandCenter({ snapshot, connected }: Props) {
   const stats = useMemo(() => buildStats(events), [events]);
 
   const chartData = useMemo(() => {
-    return events
-      .slice(-40)
-      .map((event, index) => ({
-        index,
-        sequence: event.sequence_id || index,
-      }));
+    return events.slice(-40).map((event, index) => ({
+      index,
+      sequence: event.sequence_id || index,
+    }));
   }, [events]);
 
   const recentEvents = useMemo(() => {
-    return [...events]
-      .reverse()
-      .slice(0, 12);
+    return [...events].reverse().slice(0, 12);
   }, [events]);
 
-  const executeControl = async (
-    action: string,
-    endpoint: string,
-  ) => {
+  const executeControl = async (action: string, endpoint: string) => {
     try {
       setBusy(action);
       await trigger(endpoint);
@@ -152,15 +137,11 @@ export function CommandCenter({ snapshot, connected }: Props) {
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 xl:grid-cols-4 gap-4">
-
         <div className="bg-black border border-zinc-800 rounded-2xl p-5">
-          <div className="text-zinc-500 text-sm">
-            Runtime Status
-          </div>
+          <div className="text-zinc-500 text-sm">Runtime Status</div>
 
           <div className="mt-3 flex items-center gap-3">
             <div className={`w-3 h-3 rounded-full ${connected ? "bg-emerald-400" : "bg-red-500"}`} />
-
             <div className="text-white text-xl font-semibold">
               {connected ? "CONNECTED" : "OFFLINE"}
             </div>
@@ -176,29 +157,20 @@ export function CommandCenter({ snapshot, connected }: Props) {
         </div>
 
         <div className="bg-black border border-zinc-800 rounded-2xl p-5">
-          <div className="text-zinc-500 text-sm">
-            Deployments
-          </div>
+          <div className="text-zinc-500 text-sm">Deployments</div>
 
           <div className="text-white text-4xl font-bold mt-3">
             {stats.deployments}
           </div>
 
           <div className="mt-4 flex gap-6 text-sm">
-            <div className="text-emerald-400">
-              Success {stats.successes}
-            </div>
-
-            <div className="text-red-400">
-              Fail {stats.failures}
-            </div>
+            <div className="text-emerald-400">Success {stats.successes}</div>
+            <div className="text-red-400">Fail {stats.failures}</div>
           </div>
         </div>
 
         <div className="bg-black border border-zinc-800 rounded-2xl p-5">
-          <div className="text-zinc-500 text-sm">
-            Replay Hashes
-          </div>
+          <div className="text-zinc-500 text-sm">Replay Hashes</div>
 
           <div className="text-cyan-400 text-4xl font-bold mt-3">
             {stats.uniqueHashes}
@@ -210,9 +182,7 @@ export function CommandCenter({ snapshot, connected }: Props) {
         </div>
 
         <div className="bg-black border border-zinc-800 rounded-2xl p-5">
-          <div className="text-zinc-500 text-sm">
-            Capital
-          </div>
+          <div className="text-zinc-500 text-sm">Capital</div>
 
           <div className="text-emerald-400 text-4xl font-bold mt-3">
             ${Number(snapshot?.capital || 0).toFixed(0)}
@@ -224,21 +194,20 @@ export function CommandCenter({ snapshot, connected }: Props) {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+      <DesktopWorkspace />
 
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         <div className="xl:col-span-2">
           <RuntimeGraph />
         </div>
 
         <div className="space-y-6">
-
           <div className="bg-black border border-zinc-800 rounded-2xl p-5">
             <div className="text-white font-semibold mb-5">
               Desktop Operator Controls
             </div>
 
             <div className="grid grid-cols-1 gap-3">
-
               <button
                 onClick={() => executeControl("resume", "/runner/resume")}
                 disabled={busy !== null}
@@ -301,7 +270,6 @@ export function CommandCenter({ snapshot, connected }: Props) {
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-
         <div className="bg-black border border-zinc-800 rounded-2xl p-5">
           <div className="text-white font-semibold mb-5">
             Product Intelligence
@@ -319,9 +287,7 @@ export function CommandCenter({ snapshot, connected }: Props) {
                 key={product.name}
                 className="flex items-center justify-between border-b border-zinc-800 pb-3"
               >
-                <div className="text-zinc-200">
-                  {product.name}
-                </div>
+                <div className="text-zinc-200">{product.name}</div>
 
                 <div className="text-emerald-400 font-semibold">
                   {product.score.toFixed(2)}
@@ -348,9 +314,7 @@ export function CommandCenter({ snapshot, connected }: Props) {
                 key={creative.name}
                 className="flex items-center justify-between border-b border-zinc-800 pb-3"
               >
-                <div className="text-zinc-200">
-                  {creative.name}
-                </div>
+                <div className="text-zinc-200">{creative.name}</div>
 
                 <div className="text-cyan-400 font-semibold">
                   {creative.score.toFixed(2)}
@@ -372,9 +336,7 @@ export function CommandCenter({ snapshot, connected }: Props) {
                 className="border border-zinc-800 rounded-xl p-3"
               >
                 <div className="flex items-center justify-between">
-                  <div className="text-cyan-400 text-sm">
-                    {event.type}
-                  </div>
+                  <div className="text-cyan-400 text-sm">{event.type}</div>
 
                   <div className="text-zinc-500 text-xs">
                     seq {event.sequence_id || "-"}
