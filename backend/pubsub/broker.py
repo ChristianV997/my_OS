@@ -40,6 +40,7 @@ class EventEnvelope:
     payload: dict[str, Any]
     event_version: int = 1
     correlation_id: str | None = None
+    sequence_id: int | None = None
     replay_hash: str | None = None
 
     def payload_json(self) -> str:
@@ -53,6 +54,7 @@ class EventEnvelope:
             "source": self.source,
             "event_version": self.event_version,
             "correlation_id": self.correlation_id,
+            "sequence_id": self.sequence_id,
             "replay_hash": self.replay_hash,
             **self.payload,
         }, default=str)
@@ -91,6 +93,7 @@ class ReplayBuffer:
             buf = sorted(
                 list(self._buf),
                 key=lambda e: (
+                    e.sequence_id if e.sequence_id is not None else 10**18,
                     e.ts,
                     e.replay_hash or "",
                 ),
@@ -107,6 +110,37 @@ class PubSubBroker:
 
     def __init__(self, replay_size: int = 200):
         self.replay = ReplayBuffer(max_size=replay_size)
+        self._lock = threading.Lock()
+        self._live: deque[EventEnvelope] = deque()
+        self._sequence = 0
+
+    def _next_sequence(self) -> int:
+        with self._lock:
+            self._sequence += 1
+            return self._sequence
+
+    def consume(
+        self,
+        topic: str = "ws",
+        consumer_name: str = "ws_consumer",
+        limit: int = 1000,
+    ) -> list[EventEnvelope]:
+        """Return and clear the currently buffered live envelopes.
+
+        The websocket stream polls this method in a worker thread so the broker
+        can remain synchronous while the UI receives a deterministic event feed.
+        The topic and consumer_name arguments are kept for compatibility with the
+        existing call sites and future fanout routing.
+        """
+        del topic, consumer_name
+        with self._lock:
+            if not self._live:
+                return []
+            items = list(self._live)
+            self._live.clear()
+        if len(items) > limit:
+            return items[-limit:]
+        return items
 
     def publish(
         self,
@@ -116,30 +150,50 @@ class PubSubBroker:
         correlation_id: str | None = None,
     ) -> str:
 
-        replay_hash = deterministic_replay_hash(
-            event_type,
-            payload,
-        )
+        payload_data = dict(payload)
+        sequence_id = payload_data.get("sequence_id")
+        if sequence_id is None:
+            sequence_id = self._next_sequence()
+        else:
+            sequence_id = int(sequence_id)
+            with self._lock:
+                self._sequence = max(self._sequence, sequence_id)
+
+        payload_data.setdefault("sequence_id", sequence_id)
+        payload_data.setdefault("source", source)
+
+        replay_hash = payload_data.get("replay_hash")
+        if not replay_hash:
+            replay_hash = deterministic_replay_hash(
+                event_type,
+                payload_data,
+            )
+        payload_data["replay_hash"] = replay_hash
 
         env = EventEnvelope(
             event_id=_new_id(),
             type=event_type,
-            ts=payload.get("ts", time.time()),
+            ts=payload_data.get("ts", time.time()),
             source=source,
-            payload=payload,
-            correlation_id=correlation_id,
+            payload=payload_data,
+            event_version=int(payload_data.get("event_version", 1)),
+            correlation_id=correlation_id or payload_data.get("correlation_id"),
+            sequence_id=sequence_id,
             replay_hash=replay_hash,
         )
 
         try:
             from core.stream import publish as _stream_publish
-            _stream_publish(payload)
+            _stream_publish(payload_data)
         except Exception as exc:
             _log.warning(
                 "broker_stream_publish_failed type=%s error=%s",
                 event_type,
                 exc,
             )
+
+        with self._lock:
+            self._live.append(env)
 
         self.replay.record(env)
 
