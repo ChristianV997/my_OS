@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import time
 from typing import Any
 
@@ -8,6 +10,32 @@ from warehouse.duckdb_store import warehouse
 
 
 class ExecutionTelemetry:
+
+    def _normalize_payload(
+        self,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+
+        canonical = {
+            "campaign_id": payload.get("campaign_id"),
+            "product_name": payload.get("product_name"),
+            "hook": payload.get("hook"),
+            "angle": payload.get("angle"),
+            "type": payload.get("type"),
+            "ts": payload.get("ts"),
+        }
+
+        replay_hash = hashlib.sha256(
+            json.dumps(
+                canonical,
+                sort_keys=True,
+            ).encode("utf-8")
+        ).hexdigest()
+
+        return {
+            **payload,
+            "replay_hash": replay_hash,
+        }
 
     def record_campaign_launch(
         self,
@@ -20,7 +48,7 @@ class ExecutionTelemetry:
         metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
 
-        payload = {
+        payload = self._normalize_payload({
             "type": "campaign.launch",
             "campaign_id": campaign_id,
             "product_name": product_name,
@@ -29,7 +57,7 @@ class ExecutionTelemetry:
             "platform": platform,
             "metadata": metadata or {},
             "ts": time.time(),
-        }
+        })
 
         event_id = broker.publish(
             "campaign.launch",
@@ -38,7 +66,7 @@ class ExecutionTelemetry:
         )
 
         warehouse.append_runtime_event(
-            replay_hash=f"launch:{campaign_id}",
+            replay_hash=payload["replay_hash"],
             event_type="campaign.launch",
             payload=payload,
             ts=payload["ts"],
@@ -59,7 +87,7 @@ class ExecutionTelemetry:
         metrics: dict[str, Any],
     ):
 
-        payload = {
+        payload = self._normalize_payload({
             "type": "campaign.metrics",
             "campaign_id": campaign_id,
             "product_name": product_name,
@@ -67,7 +95,7 @@ class ExecutionTelemetry:
             "angle": angle,
             "metrics": metrics,
             "ts": time.time(),
-        }
+        })
 
         broker.publish(
             "campaign.metrics",
@@ -82,7 +110,7 @@ class ExecutionTelemetry:
             angle=angle,
             predicted_score=float(metrics.get("predicted_score", 0)),
             actual_score=float(metrics.get("roas", 0)),
-            metadata=metrics,
+            metadata=payload,
         )
 
 
