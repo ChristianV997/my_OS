@@ -6,6 +6,7 @@ from backend.decision.confidence import confidence_engine, apply_confidence
 from backend.learning.signals import roas_velocity, roas_acceleration
 from backend.learning.bandit_update import bandit_weight
 from backend.learning.calibration import calibration_model
+from backend.regime.meta_strategy import strategy_memory
 from backend.simulation.reality_gap import reality_gap_engine
 from backend.core.state import ensure_state_shape
 from agents.world_model import world_model
@@ -121,6 +122,7 @@ def decide(state):
         c_score = causal_score(action, state.graph)
         velocity_bonus = vel + acc
         bandit_w = bandit_weight(action, state.graph)
+        regime_bonus = strategy_memory.score(state.detected_regime)
 
         # three-factor confidence: calibration × interval narrowness × system health
         calib_conf = calibration_model.confidence_weight()
@@ -128,14 +130,15 @@ def decide(state):
         confidence = calib_conf * interval_conf * system_conf
 
         decision_row = {
-            "action": action,
-            "score": corrected_pred + c_score + velocity_bonus + bandit_w - competition_penalty,
-            "pred": corrected_pred,
-            "pred_lo": round(0.5 * preds["lo_6h"] + 0.3 * preds["lo_12h"] + 0.2 * preds["lo_24h"], 4),
-            "pred_hi": round(0.5 * preds["hi_6h"] + 0.3 * preds["hi_12h"] + 0.2 * preds["hi_24h"], 4),
-            "pred_width": round(0.5 * preds["width_6h"] + 0.3 * preds["width_12h"] + 0.2 * preds["width_24h"], 4),
-            "interval_conf": round(interval_conf, 4),
-            "system_conf": round(system_conf, 4),
+            "action":              action,
+            "product_name":        keyword,
+            "score":               corrected_pred + c_score + velocity_bonus + bandit_w + regime_bonus - competition_penalty,
+            "pred":                corrected_pred,
+            "pred_lo":             round(0.5 * preds["lo_6h"] + 0.3 * preds["lo_12h"] + 0.2 * preds["lo_24h"], 4),
+            "pred_hi":             round(0.5 * preds["hi_6h"] + 0.3 * preds["hi_12h"] + 0.2 * preds["hi_24h"], 4),
+            "pred_width":          round(0.5 * preds["width_6h"] + 0.3 * preds["width_12h"] + 0.2 * preds["width_24h"], 4),
+            "interval_conf":       round(interval_conf, 4),
+            "system_conf":         round(system_conf, 4),
             "competition_density": round(competition_density, 4),
         }
         decisions.append(

@@ -17,13 +17,20 @@ from backend.regime.detector import detector
 from backend.regime.confidence import regime_confidence
 from backend.core.regime_transition import detect_transition
 from backend.core.state import ensure_state_shape
+from backend.regime.meta_strategy import strategy_memory
 from backend.agents.structural_evolution import structural_engine
 from backend.agents.self_healing import self_healing_engine
 from backend.agents.agent_metrics import agent_metrics_registry
 from backend.simulation.reality_gap import reality_gap_engine
+from agents.auto_kill import should_kill
+from agents.amplifier import Amplifier
+from backend.integrations.shopify_client import get_orders, compute_metrics
+from backend.integrations.meta_ads_client import get_ad_spend
 import backend.ci.hyperparam_meta as hp_meta
 from connectors.macro_signals import get_macro_signals
 
+_log = logging.getLogger(__name__)
+_amplifier = Amplifier()
 store = DelayedRewardStore()
 
 # Stochastic market environment — regime-driven trend with noise
@@ -42,6 +49,40 @@ TRANSITION_COOLDOWN_CYCLES = 5
 # Scales the macro-risk adjustment to trend; 0.02 keeps macro nudge small
 # relative to the ±0.1 volatile step, preventing macro from dominating.
 _MACRO_TREND_COEFFICIENT = 0.02
+
+# Campaigns flagged for kill (module-level; cleared on restart)
+_kill_set: set[str] = set()
+
+# Real-data state for reality gap calibration
+_real_roas_cache: float | None = None
+_real_data_counter: int = 0
+
+# Hook/angle pool — refreshed from PatternStore every 60 s, fallback to HOOKS
+_hook_pool:     list[str] = []
+_angle_pool:    list[str] = []
+_pool_ts:       float = 0.0
+_POOL_TTL:      float = 60.0
+_DEFAULT_ANGLES = ["problem-solution", "social-proof", "urgency", "curiosity", "authority"]
+
+
+def _refresh_pools() -> tuple[list[str], list[str]]:
+    global _hook_pool, _angle_pool, _pool_ts
+    import time as _time
+    if _hook_pool and (_time.time() - _pool_ts) < _POOL_TTL:
+        return _hook_pool, _angle_pool
+    try:
+        from core.content.patterns import pattern_store
+        hooks  = pattern_store.get_top_hooks(n=5)
+        angles = pattern_store.get_top_angles(n=5)
+    except Exception:
+        hooks, angles = [], []
+    if not hooks:
+        from core.creative.hooks import HOOKS
+        hooks = list(HOOKS)
+    if not angles:
+        angles = list(_DEFAULT_ANGLES)
+    _hook_pool, _angle_pool, _pool_ts = hooks, angles, _time.time()
+    return _hook_pool, _angle_pool
 
 
 def _simulate_environment():
@@ -70,7 +111,6 @@ def _generate_roas():
 
 
 def _population_diversity():
-    """Mean pairwise distance across structural population."""
     from backend.agents.structural_evolution import structure_distance
     pop = structural_engine.population
     if len(pop) < 2:
@@ -79,9 +119,27 @@ def _population_diversity():
     return sum(dists) / len(dists)
 
 
+def _refresh_real_roas():
+    """Fetch real ROAS from Shopify/Meta every 10 calls; returns cached value."""
+    global _real_roas_cache, _real_data_counter
+    _real_data_counter += 1
+    if _real_data_counter % 10 != 0:
+        return _real_roas_cache
+    try:
+        orders = get_orders(last_n_minutes=60)
+        meta = get_ad_spend(last_n_minutes=60)
+        metrics = compute_metrics(orders)
+        spend = meta.get("total_spend", 0.0)
+        if spend > 0:
+            _real_roas_cache = round(metrics["revenue"] / spend, 4)
+    except Exception:
+        pass  # keep cached value; clients already have their own fallback
+    return _real_roas_cache
+
+
 def execute(decisions, state):
     budgets = budget_allocate(decisions, total_budget=TOTAL_CYCLE_BUDGET)
-    logging.getLogger(__name__).debug(allocation_summary(decisions, budgets))
+    _log.debug(allocation_summary(decisions, budgets))
 
     # Track peak capital for drawdown monitoring (stored on state object)
     peak_capital = getattr(state, "_peak_capital", state.capital)
@@ -89,11 +147,16 @@ def execute(decisions, state):
         peak_capital = state.capital
     state._peak_capital = peak_capital
 
+    hook_pool, angle_pool = _refresh_pools()
     results = []
     for i, d in enumerate(decisions):
         action = d.get("action", {})
         structure = d.get("structure")
+        campaign_id = str(action.get("campaign_id", "") or action.get("variant", ""))
         cost = round(budgets[i], 4)
+        hook  = hook_pool[i % len(hook_pool)]
+        angle = angle_pool[i % len(angle_pool)]
+        product = d.get("product_name", str(action.get("variant", "")))
 
         roas = _generate_roas()
         revenue = roas * cost
@@ -122,24 +185,27 @@ def execute(decisions, state):
         agent_metrics_registry.record_pnl("execution", revenue, cost)
 
         outcome = {
-            "roas": round(roas, 4),
-            "roas_6h": round(max(0.01, roas * random.uniform(0.70, 0.95)), 4),
-            "roas_12h": round(max(0.01, roas * random.uniform(0.85, 1.05)), 4),
-            "roas_24h": round(max(0.01, roas * random.uniform(0.90, 1.10)), 4),
-            "revenue": round(revenue, 2),
-            "cost": cost,
-            "profit": profit,
-            "ctr": round(ctr, 4),
-            "cvr": round(cvr, 4),
-            "cac": round(cac, 4),
-            "prediction": round(pred, 4),
-            "error": round(pred - roas, 4),
-            "pred_lo": d.get("pred_lo"),
-            "pred_hi": d.get("pred_hi"),
-            "pred_width": d.get("pred_width"),
+            "product":       product,
+            "hook":          hook,
+            "angle":         angle,
+            "roas":          round(roas, 4),
+            "roas_6h":       round(max(0.01, roas * random.uniform(0.70, 0.95)), 4),
+            "roas_12h":      round(max(0.01, roas * random.uniform(0.85, 1.05)), 4),
+            "roas_24h":      round(max(0.01, roas * random.uniform(0.90, 1.10)), 4),
+            "revenue":       round(revenue, 2),
+            "cost":          cost,
+            "profit":        profit,
+            "ctr":           round(ctr, 4),
+            "cvr":           round(cvr, 4),
+            "cac":           round(cac, 4),
+            "prediction":    round(pred, 4),
+            "error":         round(pred - roas, 4),
+            "pred_lo":       d.get("pred_lo"),
+            "pred_hi":       d.get("pred_hi"),
+            "pred_width":    d.get("pred_width"),
             "interval_conf": d.get("interval_conf"),
-            "env_regime": ENV["regime"],
-            "env_trend": round(ENV["trend"], 4),
+            "env_regime":    ENV["regime"],
+            "env_trend":     round(ENV["trend"], 4),
         }
         outcome.update(action)
 
@@ -147,8 +213,17 @@ def execute(decisions, state):
         if structure:
             structural_engine.score(structure, roas)
 
-        # track reality gap (real_roas=None until external data arrives)
-        reality_gap_engine.update(roas, None)
+        # regime performance feedback
+        strategy_memory.update(ENV["regime"], roas)
+
+        # reality gap — feed real ROAS when Shopify/Meta credentials present
+        reality_gap_engine.update(roas, _refresh_real_roas())
+
+        # campaign lifecycle: flag kills for next cycle
+        kill_signal = should_kill(outcome)
+        outcome["kill_signal"] = kill_signal
+        if kill_signal and campaign_id:
+            _kill_set.add(campaign_id)
 
         store.log(action, outcome)
         state.capital += revenue - cost
@@ -168,7 +243,6 @@ def run_cycle(state):
 
     state = ensure_state_shape(state)
 
-    # initialize structural population on first cycle
     if not structural_engine.population:
         structural_engine.initialize(n=5)
 
@@ -182,45 +256,58 @@ def run_cycle(state):
     # select high-level arm from LinUCB contextual bandit
     bandit_arm = select_arm(state)
 
-    decisions = decide(state)
-    results = execute(decisions, state)
+    try:
+        decisions = decide(state)
+        results = execute(decisions, state)
+    except Exception:
+        _log.exception("cycle execute failed")
+        state.total_cycles += 1
+        return state
+
     state.event_log.log_batch(results)
 
     # feed results into portfolio engine for ROAS-weighted allocation
     portfolio_ingest(results)
 
     # auto_kill: pause underperforming campaigns via AJO (ROAS < 0.5)
-    _kill_set = set()
-    for r in results:
-        campaign_id = str(r.get("action", {}).get("variant", ""))
-        if campaign_id and r.get("roas", 1.0) < 0.5:
-            _kill_set.add(campaign_id)
-    if _kill_set:
+    _cycle_kill = {
+        str(r.get("action", {}).get("variant", ""))
+        for r in results
+        if r.get("roas", 1.0) < 0.5 and r.get("action", {}).get("variant")
+    }
+    if _cycle_kill:
         try:
             from backend.integrations.adobe_ajo import pause_campaign, is_configured as _ajo_ok
             if _ajo_ok():
-                for cid in _kill_set:
+                for cid in _cycle_kill:
                     pause_campaign(cid)
         except Exception:
             pass
 
     # amplifier: scale high-ROAS campaigns via AJO (ROAS > 2.0)
-    _amplified = [
+    _amplified_ids = [
         str(r.get("action", {}).get("variant", ""))
         for r in results
         if r.get("roas", 0.0) > 2.0 and r.get("action", {}).get("variant")
     ]
-    if _amplified:
+    if _amplified_ids:
         try:
             from backend.integrations.adobe_ajo import scale_campaign, is_configured as _ajo_ok
             if _ajo_ok():
-                for cid in _amplified[-5:]:
+                for cid in _amplified_ids[-5:]:
                     scale_campaign(cid)
         except Exception:
             pass
 
-    state = learn(state, results)
-    state.graph = update_causal(state.graph, state.event_log)
+    try:
+        state = learn(state, results)
+    except Exception:
+        _log.exception("cycle learn failed")
+
+    try:
+        state.graph = update_causal(state.graph, state.event_log)
+    except Exception:
+        _log.exception("cycle causal failed")
 
     # update LinUCB bandit reward using mean ROAS this cycle
     avg_roas_cycle = sum(r.get("roas", 0) for r in results) / max(len(results), 1)
@@ -265,27 +352,36 @@ def run_cycle(state):
 
     process_delayed()
 
+    # amplify winners from this cycle (stored in memory for next decide())
+    try:
+        winners = [r for r in results if r.get("roas", 0) > 1.5 and not r.get("kill_signal")]
+        amplified = _amplifier.amplify(winners)
+        if amplified:
+            state.memory.extend(amplified[-5:])
+    except Exception:
+        _log.exception("cycle amplify failed")
+
     # structural evolution + hyperparam meta-learning every 10 cycles
     if state.total_cycles % 10 == 0 and state.total_cycles > 0:
         global _hp_meta_state, _prev_avg_roas
+        try:
+            structural_engine.evolve()
+            avg_roas = (sum(r.get("roas", 0) for r in results) / max(len(results), 1))
+            diversity = _population_diversity()
+            self_healing_engine.heal(avg_roas, diversity, structural_engine)
 
-        structural_engine.evolve()
-        avg_roas = sum(r.get("roas", 0) for r in results) / max(len(results), 1)
-        diversity = _population_diversity()
-        self_healing_engine.heal(avg_roas, diversity, structural_engine)
+            improvement = (avg_roas - _prev_avg_roas) if _prev_avg_roas is not None else 0.0
+            _prev_avg_roas = avg_roas
 
-        # compute improvement vs. previous 10-cycle window
-        improvement = (avg_roas - _prev_avg_roas) if _prev_avg_roas is not None else 0.0
-        _prev_avg_roas = avg_roas
-
-        # update hyperparameter meta-learning and apply best params
-        _hp_meta_state = hp_meta.step(
-            _hp_meta_state,
-            regime=state.detected_regime,
-            improvement=improvement,
-            evolution_engine=structural_engine,
-        )
-        hp_meta.save_hp_meta(_hp_meta_state)
+            _hp_meta_state = hp_meta.step(
+                _hp_meta_state,
+                regime=state.detected_regime,
+                improvement=improvement,
+                evolution_engine=structural_engine,
+            )
+            hp_meta.save_hp_meta(_hp_meta_state)
+        except Exception:
+            _log.exception("cycle evolution failed")
 
     # persist cycle summary to Supabase (no-op when credentials absent)
     try:

@@ -1,6 +1,7 @@
 import json
 import os
 import threading
+from collections import deque
 
 try:  # pragma: no cover
     import redis
@@ -9,11 +10,14 @@ except Exception:  # pragma: no cover
 
 
 STREAM = "upos_events"
-STREAM_READ_COUNT = int(os.getenv("UPOS_STREAM_READ_COUNT", "10"))
+STREAM_READ_COUNT    = int(os.getenv("UPOS_STREAM_READ_COUNT", "10"))
 STREAM_READ_BLOCK_MS = int(os.getenv("UPOS_STREAM_READ_BLOCK_MS", "1000"))
+_QUEUE_MAXSIZE       = int(os.getenv("UPOS_QUEUE_MAXSIZE", "1000"))
 
 _r = None
-_queue = []
+# Bounded deque: oldest events are silently dropped when maxsize is exceeded,
+# preventing unbounded memory growth when Redis is unavailable.
+_queue: deque = deque(maxlen=_QUEUE_MAXSIZE)
 _QUEUE_LOCK = threading.Lock()
 
 if redis is not None:  # pragma: no cover

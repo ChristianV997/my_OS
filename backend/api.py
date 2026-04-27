@@ -9,6 +9,7 @@ Environment variables (set in Replit Secrets):
   CYCLES_PER_MINUTE  Background runner speed (default 10 → one cycle / 6 s)
 """
 import json
+import logging
 import os
 import threading
 import time
@@ -17,6 +18,34 @@ from datetime import datetime, timezone
 import numpy as np
 from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import PlainTextResponse
+
+# ── structured logging ────────────────────────────────────────────────────────
+try:
+    import structlog
+    structlog.configure(
+        processors=[
+            structlog.processors.TimeStamper(fmt="iso"),
+            structlog.stdlib.add_log_level,
+            structlog.processors.JSONRenderer(),
+        ],
+        wrapper_class=structlog.stdlib.BoundLogger,
+        logger_factory=structlog.stdlib.LoggerFactory(),
+    )
+except ImportError:
+    pass  # fall back to standard logging
+
+# ── Prometheus metrics ────────────────────────────────────────────────────────
+try:
+    from prometheus_client import Counter, Gauge, Histogram, generate_latest, CONTENT_TYPE_LATEST
+    _prom_cycles     = Counter("marketos_cycles_total",       "Total run_cycle() calls")
+    _prom_capital    = Gauge("marketos_capital_usd",          "Current capital in USD")
+    _prom_avg_roas   = Gauge("marketos_avg_roas",             "Average ROAS last 100 cycles")
+    _prom_regime     = Gauge("marketos_regime",               "Detected regime label", ["regime"])
+    _prom_cycle_time = Histogram("marketos_cycle_duration_s", "run_cycle() latency")
+    _PROMETHEUS_OK   = True
+except ImportError:
+    _PROMETHEUS_OK = False
 
 from backend.core.state import SystemState
 from backend.execution.loop import run_cycle
@@ -31,6 +60,13 @@ from backend.agents.structural_evolution import structural_engine
 
 STATE_PATH = os.getenv("STATE_PATH", "state/state.db")
 _CYCLES_PER_MINUTE = max(1, int(os.getenv("CYCLES_PER_MINUTE", "10")))
+
+# When ORCHESTRATOR_HANDLES_CYCLES=true the background runner skips run_cycle()
+# and only publishes the current snapshot. Set this when orchestrator/main.py
+# is deployed alongside the API to prevent double-execution of the same state.
+_ORCHESTRATOR_HANDLES_CYCLES = (
+    os.getenv("ORCHESTRATOR_HANDLES_CYCLES", "false").lower() == "true"
+)
 
 # ── app ───────────────────────────────────────────────────────────────────────
 
@@ -58,42 +94,88 @@ _last_research_at: float = 0.0
 
 # ── background runner ─────────────────────────────────────────────────────────
 
-def _research_runner():
-    """Background thread: every 5 minutes extract trend keywords from recent
-    events and feed them to the core intelligence discovery loop."""
-    global _last_research_at
-    while _bg_running:
-        now = time.time()
-        if now - _last_research_at >= _RESEARCH_INTERVAL_S:
-            try:
-                with _lock:
-                    recent = list(_state.event_log.rows[-50:])
-                # extract variant/product keywords from recent events
-                keywords = list({
-                    str(r.get("variant", ""))
-                    for r in recent
-                    if r.get("variant")
-                })[:20]
-                from core.intelligence_loop import run_intelligence
-                run_intelligence(keywords)
-            except Exception:
-                pass
-            _last_research_at = now
-        time.sleep(10)
+_api_log = logging.getLogger(__name__)
 
 
 def _background_runner():
     global _state, _last_cycle_at
     sleep_s = 60.0 / _CYCLES_PER_MINUTE
     while _bg_running:
-        new_state = run_cycle(_state)   # compute outside lock
-        with _lock:
-            _state = new_state
-            _last_cycle_at = time.time()
+        t0 = time.time()
+        try:
+            if not _ORCHESTRATOR_HANDLES_CYCLES:
+                # sole runner: execute the full cycle and update shared state
+                new_state = run_cycle(_state)   # compute outside lock
+                with _lock:
+                    _state = new_state
+                    _last_cycle_at = time.time()
+            else:
+                # orchestrator is the cycle driver; just read current state
+                with _lock:
+                    new_state = _state
+
+            # Prometheus instrumentation
+            if _PROMETHEUS_OK and not _ORCHESTRATOR_HANDLES_CYCLES:
+                elapsed = time.time() - t0
+                _prom_cycles.inc()
+                _prom_capital.set(new_state.capital)
+                rows = new_state.event_log.rows[-100:]
+                avg_roas = sum(r.get("roas", 0) for r in rows) / max(len(rows), 1)
+                _prom_avg_roas.set(avg_roas)
+                regime = new_state.detected_regime or "unknown"
+                _prom_regime.labels(regime=regime).set(1)
+                _prom_cycle_time.observe(elapsed)
+            # Publish full snapshot to live event stream (WebSocket clients)
+            try:
+                from backend.runtime.state import build_snapshot
+                from backend.events.emitter import emit_snapshot
+                snap = build_snapshot(new_state)
+                emit_snapshot(snap, source="api")
+            except Exception:
+                pass
+            try:
+                from backend.runtime.task_inventory import task_registry as _tr
+                _tr.heartbeat("background_runner", status="ok")
+                _tr.heartbeat("sw_runtime_snapshot", status="ok")
+            except Exception:
+                pass
+        except Exception:
+            _api_log.exception("background runner cycle error")
         time.sleep(sleep_s)
 
 
 # ── lifecycle ─────────────────────────────────────────────────────────────────
+
+def _research_runner():
+    from backend.jobs.runner import JobRegistry
+    from backend.jobs.scheduler import IngestionScheduler
+    from backend.jobs.research_trend_v1 import register_research_trend_v1_job, register_research_prune_job
+    registry = JobRegistry()
+    register_research_trend_v1_job(registry)
+    register_research_prune_job(registry)
+    scheduler = IngestionScheduler(registry)
+    while _bg_running:
+        try:
+            scheduler.tick()
+            # Feed trend keywords into the core intelligence discovery loop
+            with _lock:
+                recent = list(_state.event_log.rows[-50:])
+            keywords = list({str(r.get("variant", "")) for r in recent if r.get("variant")})[:20]
+            if keywords:
+                try:
+                    from core.intelligence_loop import run_intelligence
+                    run_intelligence(keywords)
+                except Exception:
+                    pass
+        except Exception:
+            _api_log.exception("research runner error")
+        try:
+            from backend.runtime.task_inventory import task_registry as _tr
+            _tr.heartbeat("research_runner", status="ok")
+        except Exception:
+            pass
+        time.sleep(300)  # check every 5 minutes
+
 
 @app.on_event("startup")
 async def _startup():
@@ -106,12 +188,22 @@ async def _startup():
     _bg_running = True
     threading.Thread(target=_background_runner, daemon=True).start()
     threading.Thread(target=_research_runner, daemon=True).start()
+    try:
+        from backend.runtime.task_inventory import start_heartbeat_broadcaster
+        start_heartbeat_broadcaster(interval_s=30.0)
+    except Exception:
+        pass
 
 
 @app.on_event("shutdown")
 async def _shutdown():
     global _bg_running
     _bg_running = False
+    try:
+        from backend.runtime.task_inventory import stop_heartbeat_broadcaster
+        stop_heartbeat_broadcaster()
+    except Exception:
+        pass
     from backend.core.serializer import save
     try:
         save(_state, STATE_PATH)
@@ -408,6 +500,102 @@ def memory():
     ]
 
 
+@app.get("/agent-metrics")
+def agent_metrics():
+    """Per-agent PnL, decision counts, and drift status."""
+    try:
+        from backend.agents.agent_metrics import agent_metrics_registry
+        return {"agents": agent_metrics_registry.snapshot()}
+    except Exception:
+        return {"agents": []}
+
+
+@app.get("/portfolio")
+def portfolio():
+    """ROAS-weighted budget allocation across active products/variants."""
+    try:
+        from backend.decision.portfolio_engine import get_allocations, top_products
+        return {
+            "allocations": get_allocations(),
+            "top_products": top_products(n=5),
+        }
+    except Exception:
+        return {"allocations": {}, "top_products": []}
+
+
+@app.get("/opportunities")
+def opportunities(limit: int = Query(default=20, ge=1, le=100)):
+    """Ranked product opportunities from the live simulation layer.
+
+    Returns the current top-N candidates scored by the simulation engine,
+    enriched with:
+      - simulation rank score and corrected ROAS prediction
+      - playbook confidence and evidence count
+      - calibration status (are predictions reliable for this product?)
+      - suggested top hooks and angles from PatternStore
+
+    Designed for operational decision-making: highest rank_score products
+    are the best candidates for content generation and campaign launch.
+    """
+    try:
+        from simulation.engine import simulation_engine
+        from core.content.patterns import pattern_store
+        from core.content.playbook import playbook_memory
+        from simulation.calibration import calibration_store
+        from core.signals import signal_engine
+
+        signals = signal_engine.get()
+        patterns = pattern_store.get_patterns()
+        all_pbs  = {p.product: vars(p) for p in playbook_memory.all()}
+
+        ranked = simulation_engine.score_signals(
+            signals[:30],
+            patterns=patterns,
+            playbooks=all_pbs,
+        )
+
+        cal_summary = calibration_store.summary()
+        by_product  = cal_summary.get("by_product", {})
+
+        results = []
+        for r in ranked[:limit]:
+            pb = all_pbs.get(r.product, {})
+            product_cal = by_product.get(r.product, {})
+            results.append({
+                "rank":              r.rank,
+                "product":           r.product,
+                "rank_score":        round(r.rank_score, 4),
+                "predicted_roas":    round(r.predicted_roas, 4),
+                "corrected_roas":    round(r.corrected_roas, 4),
+                "predicted_ctr":     round(r.predicted_ctr, 4),
+                "confidence":        round(r.confidence, 4),
+                "risk_score":        round(r.risk_score, 4),
+                # Playbook context
+                "playbook_confidence": round(float(pb.get("confidence", 0.0)), 4),
+                "evidence_count":      int(pb.get("evidence_count", 0)),
+                "top_hooks":           pb.get("top_hooks", [])[:3],
+                "top_angles":          pb.get("top_angles", [])[:3],
+                # Calibration readiness
+                "calibrated":          product_cal.get("n", 0) >= 5,
+                "calibration_records": product_cal.get("n", 0),
+                # Action priority: corrected_roas * confidence / (1 + risk)
+                "action_priority": round(
+                    r.corrected_roas * r.confidence / max(1.0 + r.risk_score, 0.01), 4
+                ),
+            })
+
+        results.sort(key=lambda x: x["action_priority"], reverse=True)
+        return {
+            "count":        len(results),
+            "calibrated":   cal_summary.get("ready", False),
+            "top_hooks":    patterns.get("top_hooks", [])[:5],
+            "top_angles":   patterns.get("top_angles", [])[:5],
+            "opportunities": results,
+        }
+    except Exception as exc:
+        return {"count": 0, "opportunities": [], "error": str(exc)}
+
+
 # ── UPOS compatibility routes (optional — imported only when present) ──────────
 
 try:
@@ -417,6 +605,38 @@ try:
     app.include_router(_dashboard_router, prefix="/dashboard")
 except ImportError:
     pass
+
+try:
+    from api.pods import router as _pods_router
+    app.include_router(_pods_router, prefix="/pods-v2")
+except ImportError:
+    pass
+
+
+# ── observability endpoints ───────────────────────────────────────────────────
+
+@app.get("/metrics/prometheus", response_class=PlainTextResponse)
+def prometheus_metrics():
+    """Prometheus scrape endpoint — exposes all registered metrics."""
+    if not _PROMETHEUS_OK:
+        return PlainTextResponse("# prometheus_client not installed\n", media_type="text/plain")
+    return PlainTextResponse(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
+
+@app.get("/phase")
+def phase_status():
+    """Current lifecycle phase and promotion KPIs."""
+    try:
+        from core.system.phase_controller import phase_controller
+        from core.system.resource_allocator import resource_allocator
+        status = phase_controller.status()
+        alloc  = resource_allocator.describe(
+            phase_controller.current,
+            total_budget=500.0,
+        )
+        return {"phase": status, "allocation": alloc}
+    except Exception:
+        return {"phase": {"phase": "RESEARCH"}, "allocation": {}}
 
 
 # ── Phase 2 connector endpoints ───────────────────────────────────────────────
@@ -429,13 +649,6 @@ def macro():
         return get_macro_signals()
     except Exception:
         return {"error": "macro signals unavailable"}
-
-
-@app.get("/portfolio")
-def portfolio():
-    """ROAS-weighted portfolio allocation across active product variants."""
-    from backend.decision.portfolio_engine import top_products
-    return top_products(n=10)
 
 
 @app.get("/replay_buffer")
@@ -455,6 +668,51 @@ def bandit_status():
     from backend.learning.contextual_bandit import bandit_instance
     b = bandit_instance()
     return {"arms": b.arms, "alpha": b.alpha}
+
+
+@app.get("/snapshot")
+def snapshot():
+    """Full runtime snapshot — used by dashboard on initial load before WS connects."""
+    try:
+        from backend.runtime.state import build_snapshot
+        with _lock:
+            snap = build_snapshot(_state)
+        return snap.to_dict()
+    except Exception as exc:
+        return {"error": str(exc)}
+
+
+@app.get("/runtime/tasks")
+def runtime_tasks():
+    """Live task inventory: all loops, schedulers, Celery tasks, queues, WS emitters,
+    and state writers with their current status and heartbeat timestamps."""
+    try:
+        from backend.runtime.task_inventory import task_registry
+        return {
+            "summary": task_registry.summary(),
+            "live_threads": task_registry.live_threads(),
+            "tasks": task_registry.all(),
+        }
+    except Exception as exc:
+        return {"error": str(exc)}
+
+
+@app.get("/playbook")
+def get_playbook(product: str = None):
+    """Return stored playbooks and content patterns. Filter by ?product= if desired."""
+    try:
+        from core.content.playbook import playbook_memory
+        from core.content.patterns import pattern_store
+        playbooks = playbook_memory.all()
+        if product:
+            pb = playbook_memory.get(product)
+            playbooks = [pb] if pb else []
+        return {
+            "playbooks": [vars(p) for p in playbooks],
+            "patterns":  pattern_store.get_patterns(),
+        }
+    except Exception as exc:
+        return {"error": str(exc)}
 
 
 @app.post("/ajo/apply")
@@ -901,3 +1159,126 @@ def prediction_errors(limit: int = Query(default=100, ge=1, le=500)):
         "calibration": stats,
         "total_updates": _wm_calibrator.total_updates,
     }
+
+
+# ── TikTok Ads endpoints ─────────────────────────────────────────────────────
+
+@app.post("/tiktok/launch")
+def tiktok_launch(product: str, phase: str = "EXPLORE"):
+    """Launch a TikTok campaign from the best playbook for this product.
+    Safe: defaults to dry-run mode. Set TIKTOK_DRY_RUN=false to go live.
+    """
+    try:
+        from backend.integrations.tiktok_ads import launch_from_playbook
+        from core.content.playbook import playbook_memory
+        pb = playbook_memory.get(product)
+        if not pb:
+            return {"status": "error", "reason": "no_playbook", "product": product}
+        return launch_from_playbook(vars(pb), phase=phase)
+    except Exception as exc:
+        return {"status": "error", "error": str(exc)}
+
+
+@app.get("/tiktok/roas")
+def tiktok_roas_report():
+    """Fetch latest ROAS from TikTok reporting API (or simulated in dry-run)."""
+    try:
+        from backend.integrations.tiktok_ads import fetch_roas
+        # Real: pull active campaign IDs from portfolio engine
+        try:
+            from backend.decision.portfolio_engine import top_products
+            products = top_products(n=10)
+            cids = [str(p.get("product_id", "")) for p in products if p.get("product_id")]
+        except Exception:
+            cids = []
+        if not cids:
+            cids = ["demo_campaign"]
+        roas_map = fetch_roas(cids)
+        return {"roas": roas_map, "campaign_count": len(cids)}
+    except Exception as exc:
+        return {"error": str(exc)}
+
+
+@app.post("/tiktok/check")
+def tiktok_check_and_act(campaign_id: str, spend: float, budget: float, roas: float):
+    """Run anomaly check on a campaign: kill if overspend+bad ROAS, scale if win streak."""
+    try:
+        from backend.integrations.tiktok_ads import check_and_act
+        action = check_and_act(campaign_id, spend, budget, roas)
+        return {"campaign_id": campaign_id, "action": action}
+    except Exception as exc:
+        return {"error": str(exc)}
+
+
+# ── Simulation layer ───────────────────────────────────────────────────────────
+
+@app.get("/simulation/scores")
+def simulation_scores(limit: int = 20):
+    """Return top-ranked simulation scores from the most recent scoring run."""
+    try:
+        from simulation.engine import simulation_engine
+        from core.signals import signal_engine as _sig
+        from core.content.patterns import pattern_store
+        from core.content.playbook import playbook_memory
+
+        patterns = pattern_store.get_patterns()
+        all_playbooks = {p.product: p for p in playbook_memory.all()}
+        signals = _sig.get()[:limit]
+        ranked = simulation_engine.score_signals(
+            signals,
+            patterns=patterns,
+            playbooks=all_playbooks,
+        )
+        return {
+            "scores": [r.to_dict() for r in ranked],
+            "total": len(ranked),
+            "model_info": simulation_engine.report().get("model", {}),
+        }
+    except Exception as exc:
+        return {"error": str(exc), "scores": []}
+
+
+@app.get("/simulation/report")
+def simulation_report():
+    """Return simulation layer health: calibration stats, model info, replay row count."""
+    try:
+        from simulation.engine import simulation_engine
+        return simulation_engine.report()
+    except Exception as exc:
+        return {"error": str(exc)}
+
+
+@app.get("/simulation/calibration")
+def simulation_calibration():
+    """Return prediction-vs-reality calibration audit (MAE, RMSE, bias, per-product)."""
+    try:
+        from simulation.calibration import calibration_store
+        return calibration_store.summary()
+    except Exception as exc:
+        return {"error": str(exc)}
+
+
+@app.get("/runtime/state")
+def runtime_state():
+    """Return full canonical RuntimeState as JSON."""
+    try:
+        from backend.runtime.state import build_runtime_state
+        rs = build_runtime_state(_state)
+        return rs.to_dict()
+    except Exception as exc:
+        return {"error": str(exc)}
+
+
+# ── WebSocket live event stream ────────────────────────────────────────────────
+
+try:
+    from fastapi import WebSocket as _WebSocket
+    from api.ws import event_stream as _ws_event_stream
+
+    @app.websocket("/ws")
+    async def websocket_endpoint(ws: _WebSocket):
+        """Live event stream. Pushes cycle/signal/worker/feedback events as JSON frames."""
+        await _ws_event_stream(ws)
+
+except ImportError:
+    pass

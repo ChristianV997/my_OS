@@ -1,17 +1,39 @@
+# ── core runtime ──────────────────────────────────────────────────────────────
 numpy
 scikit-learn
 statsmodels
 fastapi
-uvicorn
-streamlit
-pytest
-httpx
+uvicorn[standard]
 requests
+httpx
 duckdb
+supabase
+
+# ── ML / prediction ───────────────────────────────────────────────────────────
 mapie
-evidently
 cvxpy
-ShopifyAPI
 mabwiser
 dowhy
-supabase
+
+# ── async task queue + message bus ────────────────────────────────────────────
+celery[redis]
+redis
+
+# ── signal ingestion ──────────────────────────────────────────────────────────
+pytrends
+beautifulsoup4
+lxml
+
+# ── observability ─────────────────────────────────────────────────────────────
+prometheus-client
+structlog
+sentry-sdk[fastapi]
+
+# ── integrations ──────────────────────────────────────────────────────────────
+ShopifyAPI
+evidently
+
+# ── dev / test ────────────────────────────────────────────────────────────────
+pytest
+pytest-asyncio
+streamlit
