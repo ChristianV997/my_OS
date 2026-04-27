@@ -358,6 +358,20 @@ def _register_all() -> None:
         module="simulation.integration",
         interval_s=10,
     )
+    task_registry.register(
+        "content_generation_worker",
+        kind="loop",
+        description="generate_creative(): PatternStore-guided hook/script generation for top sim candidates",
+        module="orchestrator.main",
+        interval_s=30,
+    )
+    task_registry.register(
+        "metrics_ingestion_worker",
+        kind="loop",
+        description="Shopify+Meta+TikTok real metric ingestion → CalibrationStore outcome recording",
+        module="orchestrator.main",
+        interval_s=30,
+    )
 
 
 _register_all()

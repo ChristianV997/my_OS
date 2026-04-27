@@ -88,6 +88,16 @@ def _register_adapters() -> None:
         signal_engine.register_source("google_trends", _google_trends_fetch)
     except Exception:
         pass
+    try:
+        from backend.adapters.reddit_trends import register as _r3
+        _r3(signal_engine)
+    except Exception:
+        pass
+    try:
+        from backend.adapters.youtube_trends import register as _r4
+        _r4(signal_engine)
+    except Exception:
+        pass
 
 
 _register_adapters()

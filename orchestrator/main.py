@@ -121,19 +121,56 @@ def _run_feedback_collection() -> dict[str, Any]:
 
 
 def _run_scaling() -> dict[str, Any]:
-    """Scale/kill campaigns via AJO based on validated ROAS."""
+    """Scale/kill campaigns and launch new ones from high-confidence playbooks.
+
+    Two execution paths (both run independently):
+    1. AJO scale — if Adobe AJO is configured, scale existing winners.
+    2. Playbook launch — for products with confidence >= 0.6, launch a fresh
+       TikTok campaign via launch_from_playbook() (dry-run safe).
+    """
+    scaled   = 0
+    launched = 0
     try:
         from backend.decision.portfolio_engine import top_products
-        from backend.integrations.adobe_ajo import scale_campaign, is_configured
-        if not is_configured():
-            return {"status": "skipped", "reason": "AJO not configured"}
-        winners = top_products(n=3)
-        scaled = 0
-        for p in winners:
-            if p.get("weight", 0) > 0.3:
-                scale_campaign(str(p.get("product_id", "")))
-                scaled += 1
-        return {"status": "ok", "scaled": scaled}
+
+        # ── Path 1: AJO scale existing campaigns ─────────────────────────────
+        try:
+            from backend.integrations.adobe_ajo import scale_campaign, is_configured as ajo_ok
+            if ajo_ok():
+                winners = top_products(n=3)
+                for p in winners:
+                    if p.get("weight", 0) > 0.3:
+                        scale_campaign(str(p.get("product_id", "")))
+                        scaled += 1
+        except Exception as exc:
+            _log.debug("ajo_scale_failed error=%s", exc)
+
+        # ── Path 2: Launch new campaigns from high-confidence playbooks ───────
+        try:
+            from core.content.playbook import playbook_memory
+            from backend.integrations.tiktok_ads import launch_from_playbook
+            phase = "SCALE"
+            try:
+                phase = phase_controller.current.value
+            except Exception:
+                pass
+            for pb in playbook_memory.all():
+                confidence = getattr(pb, "confidence", 0.0)
+                if confidence < 0.6:
+                    continue
+                result = launch_from_playbook(vars(pb), phase=phase)
+                if result.get("status") != "error":
+                    launched += 1
+                    _log.info("playbook_launched product=%s confidence=%s campaign=%s",
+                              pb.product, confidence, result.get("campaign_id"))
+                if launched >= 3:   # cap launches per tick to avoid runaway spend
+                    break
+        except Exception as exc:
+            _log.debug("playbook_launch_failed error=%s", exc)
+
+        if scaled == 0 and launched == 0:
+            return {"status": "skipped", "reason": "no_qualified_campaigns"}
+        return {"status": "ok", "scaled": scaled, "launched": launched}
     except Exception as exc:
         _log.exception("scaling_failed error=%s", exc)
         return {"status": "error", "error": str(exc)}
@@ -147,6 +184,131 @@ def _run_simulation() -> dict[str, Any]:
         return result
     except Exception as exc:
         _log.exception("simulation_worker_failed error=%s", exc)
+        return {"status": "error", "error": str(exc)}
+
+
+def _run_content_generation() -> dict[str, Any]:
+    """Generate hooks and scripts for the top-ranked simulation candidates.
+
+    Uses PatternStore top_hooks + playbook memory to guide generation so
+    outputs are informed by historical winner patterns, not random.
+    Stores generated content back into playbook memory for the next cycle.
+    """
+    try:
+        from simulation.engine import simulation_engine
+        from core.content.patterns import pattern_store
+        from core.content.playbook import playbook_memory
+        from core.creative.generator import generate_creative
+
+        # Get top simulation result (already ranked by rank_score)
+        report = simulation_engine.report()
+        top_hooks  = pattern_store.get_top_hooks(n=3)
+        top_angles = pattern_store.get_top_angles(n=3)
+
+        if not report.get("top_hooks") and not top_hooks:
+            return {"status": "skipped", "reason": "no_pattern_data"}
+
+        # Work off the top-3 candidates from simulation
+        ranked = simulation_engine.score_signals(
+            [{"product": h, "score": 0.7, "source": "intelligence"} for h in (top_hooks or ["trending product"])[:3]],
+            patterns=pattern_store.get_patterns(),
+        )
+
+        generated = 0
+        for result in ranked[:3]:
+            product = result.product or "trending product"
+            angle   = (top_angles[0] if top_angles else "problem-solution")
+            try:
+                script = generate_creative(product, angle)
+                # Store generated content in playbook so it's available for launch
+                pb = playbook_memory.get(product)
+                if pb is not None:
+                    # Playbook exists — annotate with generated script
+                    pb.metadata = getattr(pb, "metadata", {})  # type: ignore[attr-defined]
+                    if hasattr(pb, "metadata"):
+                        pb.metadata["last_script"] = script[:200]
+                generated += 1
+                _log.info("content_generated product=%s angle=%s", product, angle)
+            except Exception as gen_exc:
+                _log.warning("content_generate_failed product=%s error=%s", product, gen_exc)
+
+        return {"status": "ok", "generated": generated, "top_hooks": top_hooks[:3]}
+    except Exception as exc:
+        _log.exception("content_generation_failed error=%s", exc)
+        return {"status": "error", "error": str(exc)}
+
+
+def _run_metrics_ingestion() -> dict[str, Any]:
+    """Ingest real platform metrics and close the prediction→reality loop.
+
+    Fetches:
+      - Shopify order revenue (last 60 min)
+      - Meta ad spend (last 60 min)
+      - TikTok campaign ROAS (for any tracked campaign IDs)
+
+    Then records real outcomes into CalibrationStore so future predictions
+    are corrected by actual performance, not just simulated ROAS.
+    Emits a metrics.ingested event for the dashboard.
+    """
+    try:
+        from simulation.calibration import calibration_store
+        from backend.events.emitter import emit_metrics_ingested
+
+        metrics: dict[str, Any] = {}
+
+        # Shopify revenue
+        try:
+            from backend.integrations.shopify_client import get_orders, compute_metrics
+            orders  = get_orders(last_n_minutes=60)
+            shopify = compute_metrics(orders)
+            metrics["shopify_revenue"]    = shopify.get("revenue", 0.0)
+            metrics["shopify_order_count"] = shopify.get("order_count", 0)
+        except Exception as exc:
+            _log.debug("metrics_shopify_failed error=%s", exc)
+
+        # Meta ad spend
+        try:
+            from backend.integrations.meta_ads_client import get_ad_spend
+            meta = get_ad_spend(last_n_minutes=60)
+            metrics["meta_spend"]     = meta.get("total_spend", 0.0)
+            metrics["meta_campaigns"] = len(meta.get("campaigns", []))
+        except Exception as exc:
+            _log.debug("metrics_meta_failed error=%s", exc)
+
+        # Compute blended real ROAS and record into calibration store
+        revenue = float(metrics.get("shopify_revenue", 0.0))
+        spend   = float(metrics.get("meta_spend", 0.0))
+        if spend > 0 and revenue > 0:
+            real_roas = round(revenue / spend, 4)
+            metrics["real_roas"] = real_roas
+            # Record outcome against any pending predictions for "blended" product
+            calibration_store.record_outcome("blended", actual_roas=real_roas)
+            _log.info("metrics_real_roas_recorded roas=%s", real_roas)
+
+        # TikTok ROAS for tracked campaigns (if token configured)
+        try:
+            from backend.integrations.tiktok_ads import fetch_roas, is_configured
+            if is_configured():
+                # Retrieve active campaign IDs from portfolio engine
+                from backend.decision.portfolio_engine import portfolio
+                campaign_ids = [str(k) for k in list(portfolio.keys())[:10] if k]
+                if campaign_ids:
+                    roas_map = fetch_roas(campaign_ids)
+                    metrics["tiktok_campaign_count"] = len(roas_map)
+                    for cid, roas in roas_map.items():
+                        calibration_store.record_outcome(cid, actual_roas=roas)
+                        _log.debug("metrics_tiktok_roas_recorded campaign=%s roas=%s", cid, roas)
+        except Exception as exc:
+            _log.debug("metrics_tiktok_failed error=%s", exc)
+
+        if not metrics:
+            return {"status": "skipped", "reason": "no_metrics_available"}
+
+        emit_metrics_ingested("orchestrator", metrics)
+        return {"status": "ok", "metrics": {k: v for k, v in metrics.items()
+                                             if isinstance(v, (int, float, str))}}
+    except Exception as exc:
+        _log.exception("metrics_ingestion_failed error=%s", exc)
         return {"status": "error", "error": str(exc)}
 
 
@@ -197,10 +359,21 @@ def _with_retry(fn: Any, attempts: int = 2) -> dict[str, Any]:
 # ── phase dispatch table ───────────────────────────────────────────────────────
 
 _PHASE_WORKERS: dict[Phase, list[Any]] = {
-    Phase.RESEARCH:  [_run_simulation, _run_signal_ingestion, _run_signal_ingestion, _run_execution_cycle],
-    Phase.EXPLORE:   [_run_simulation, _run_signal_ingestion, _run_execution_cycle, _run_execution_cycle, _run_feedback_collection],
-    Phase.VALIDATE:  [_run_signal_ingestion, _run_execution_cycle, _run_feedback_collection, _run_feedback_collection],
-    Phase.SCALE:     [_run_execution_cycle, _run_feedback_collection, _run_scaling, _run_scaling],
+    # RESEARCH: discover signals + warm simulation; ingest first metrics
+    Phase.RESEARCH:  [_run_simulation, _run_signal_ingestion, _run_signal_ingestion,
+                      _run_execution_cycle, _run_metrics_ingestion],
+    # EXPLORE: signal → simulate → execute × 2 → feedback → generate content
+    Phase.EXPLORE:   [_run_simulation, _run_signal_ingestion, _run_execution_cycle,
+                      _run_execution_cycle, _run_feedback_collection,
+                      _run_content_generation, _run_metrics_ingestion],
+    # VALIDATE: execution + feedback × 2 + metrics ingestion to close loop
+    Phase.VALIDATE:  [_run_signal_ingestion, _run_execution_cycle,
+                      _run_feedback_collection, _run_feedback_collection,
+                      _run_content_generation, _run_metrics_ingestion],
+    # SCALE: execute + feedback + launch playbooks + scale winners + ingest metrics
+    Phase.SCALE:     [_run_execution_cycle, _run_feedback_collection,
+                      _run_content_generation, _run_scaling, _run_scaling,
+                      _run_metrics_ingestion],
 }
 
 
@@ -318,11 +491,13 @@ def run() -> None:
                     pass
                 # Heartbeat task inventory
                 _worker_task = {
-                    "_run_signal_ingestion":   "signal_ingestion_worker",
-                    "_run_execution_cycle":    "execution_cycle_worker",
+                    "_run_signal_ingestion":    "signal_ingestion_worker",
+                    "_run_execution_cycle":     "execution_cycle_worker",
                     "_run_feedback_collection": "feedback_collection_worker",
-                    "_run_scaling":            "scaling_worker",
-                    "_run_simulation":         "simulation_worker",
+                    "_run_scaling":             "scaling_worker",
+                    "_run_simulation":          "simulation_worker",
+                    "_run_content_generation":  "content_generation_worker",
+                    "_run_metrics_ingestion":   "metrics_ingestion_worker",
                 }.get(worker_fn.__name__, worker_fn.__name__)
                 try:
                     from backend.runtime.task_inventory import task_registry as _tr
