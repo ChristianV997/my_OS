@@ -10,6 +10,7 @@ import { AgentStatus } from "./components/AgentStatus";
 import { TaskInventoryPanel } from "./components/TaskInventoryPanel";
 import { SimulationPanel } from "./components/SimulationPanel";
 import { CommandCenter } from "./components/CommandCenter";
+import { MobileCommandCenter } from "./components/MobileCommandCenter";
 
 const TABS = ["Command Center", "Overview", "Simulation", "Tasks"] as const;
 type Tab = typeof TABS[number];
@@ -27,15 +28,15 @@ export default function App() {
   const [tab, setTab] = useState<Tab>("Command Center");
 
   return (
-    <div className="min-h-screen bg-gray-950 flex flex-col">
+    <div className="min-h-screen bg-gray-950 flex flex-col overflow-hidden">
       <PhaseHeader snapshot={snapshot} connected={connected} />
 
-      <div className="flex gap-1 px-4 pt-3 border-b border-gray-800 overflow-auto">
+      <div className="flex gap-1 px-2 md:px-4 pt-3 border-b border-gray-800 overflow-x-auto scrollbar-thin scrollbar-thumb-zinc-700">
         {TABS.map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
-            className={`px-4 py-2 text-sm rounded-t font-medium whitespace-nowrap transition-colors ${
+            className={`px-3 md:px-4 py-2 text-xs md:text-sm rounded-t font-medium whitespace-nowrap transition-colors ${
               tab === t
                 ? "bg-gray-900 text-white border border-b-transparent border-gray-800"
                 : "text-gray-500 hover:text-gray-300"
@@ -46,9 +47,21 @@ export default function App() {
         ))}
       </div>
 
-      <main className="flex-1 p-4">
+      <main className="flex-1 p-2 md:p-4 overflow-y-auto">
         {tab === "Command Center" && (
-          <CommandCenter snapshot={snapshot} connected={connected} />
+          <>
+            <MobileCommandCenter
+              snapshot={snapshot}
+              connected={connected}
+            />
+
+            <div className="hidden xl:block">
+              <CommandCenter
+                snapshot={snapshot}
+                connected={connected}
+              />
+            </div>
+          </>
         )}
 
         {tab === "Overview" && (
@@ -64,8 +77,14 @@ export default function App() {
             </div>
 
             <div className="space-y-4">
-              <AgentStatus snapshot={snapshot} lastWorker={lastWorker} connected={connected} />
+              <AgentStatus
+                snapshot={snapshot}
+                lastWorker={lastWorker}
+                connected={connected}
+              />
+
               <SignalsFeed signals={snapshot?.top_signals ?? []} />
+
               <PlaybookPanel
                 playbooks={snapshot?.top_playbooks ?? []}
                 patterns={snapshot?.patterns ?? {
