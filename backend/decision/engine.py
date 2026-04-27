@@ -131,6 +131,7 @@ def decide(state):
 
         decision_row = {
             "action":              action,
+            "product_name":        keyword,
             "score":               corrected_pred + c_score + velocity_bonus + bandit_w + regime_bonus - competition_penalty,
             "pred":                corrected_pred,
             "pred_lo":             round(0.5 * preds["lo_6h"] + 0.3 * preds["lo_12h"] + 0.2 * preds["lo_24h"], 4),

@@ -41,6 +41,9 @@ TICK_INTERVAL   = float(os.getenv("ORCHESTRATOR_TICK_S", "10"))
 TOTAL_BUDGET    = float(os.getenv("ORCHESTRATOR_BUDGET", "500"))
 TOTAL_WORKERS   = int(os.getenv("ORCHESTRATOR_WORKERS", "4"))
 
+# Track launched TikTok campaigns so metrics ingestion can pair ROAS → product
+_active_campaigns: dict[str, str] = {}   # campaign_id → product_name
+
 
 # ── worker dispatchers ────────────────────────────────────────────────────────
 
@@ -160,9 +163,12 @@ def _run_scaling() -> dict[str, Any]:
                     continue
                 result = launch_from_playbook(vars(pb), phase=phase)
                 if result.get("status") != "error":
+                    cid = result.get("campaign_id", "")
+                    if cid:
+                        _active_campaigns[cid] = pb.product
                     launched += 1
                     _log.info("playbook_launched product=%s confidence=%s campaign=%s",
-                              pb.product, confidence, result.get("campaign_id"))
+                              pb.product, confidence, cid)
                 if launched >= 3:   # cap launches per tick to avoid runaway spend
                     break
         except Exception as exc:
@@ -188,51 +194,63 @@ def _run_simulation() -> dict[str, Any]:
 
 
 def _run_content_generation() -> dict[str, Any]:
-    """Generate hooks and scripts for the top-ranked simulation candidates.
+    """Generate hooks and scripts for the top-ranked trending products.
 
-    Uses PatternStore top_hooks + playbook memory to guide generation so
-    outputs are informed by historical winner patterns, not random.
-    Stores generated content back into playbook memory for the next cycle.
+    Pulls real trending products from the signal engine, selects the best
+    hooks/angles from PatternStore (falls back to the curated HOOKS list),
+    generates a script per product, and upserts into playbook_memory so
+    _run_scaling() can launch campaigns from the result.
     """
     try:
-        from simulation.engine import simulation_engine
         from core.content.patterns import pattern_store
-        from core.content.playbook import playbook_memory
+        from core.content.playbook import playbook_memory, generate_playbook, Playbook
         from core.creative.generator import generate_creative
+        from core.signals import signal_engine
 
-        # Get top simulation result (already ranked by rank_score)
-        report = simulation_engine.report()
+        # ── hooks / angles ────────────────────────────────────────────────────
         top_hooks  = pattern_store.get_top_hooks(n=3)
         top_angles = pattern_store.get_top_angles(n=3)
+        if not top_hooks:
+            from core.creative.hooks import HOOKS
+            top_hooks = list(HOOKS)[:3]
+        if not top_angles:
+            top_angles = ["problem-solution", "social-proof", "urgency"]
 
-        if not report.get("top_hooks") and not top_hooks:
-            return {"status": "skipped", "reason": "no_pattern_data"}
-
-        # Work off the top-3 candidates from simulation
-        ranked = simulation_engine.score_signals(
-            [{"product": h, "score": 0.7, "source": "intelligence"} for h in (top_hooks or ["trending product"])[:3]],
-            patterns=pattern_store.get_patterns(),
-        )
+        # ── real trending products ────────────────────────────────────────────
+        try:
+            signals  = signal_engine.get()
+            products = list({s.get("product", "") for s in signals if s.get("product")})[:5]
+        except Exception:
+            products = []
+        if not products:
+            products = ["trending product"]
 
         generated = 0
-        for result in ranked[:3]:
-            product = result.product or "trending product"
-            angle   = (top_angles[0] if top_angles else "problem-solution")
+        for product in products[:3]:
+            angle  = top_angles[0]
+            hook   = top_hooks[0]
             try:
                 script = generate_creative(product, angle)
-                # Store generated content in playbook so it's available for launch
-                pb = playbook_memory.get(product)
-                if pb is not None:
-                    # Playbook exists — annotate with generated script
-                    pb.metadata = getattr(pb, "metadata", {})  # type: ignore[attr-defined]
-                    if hasattr(pb, "metadata"):
-                        pb.metadata["last_script"] = script[:200]
+                # Upsert a playbook so _run_scaling() can launch it
+                existing = playbook_memory.get(product)
+                if existing is None:
+                    pb = Playbook(
+                        product=product,
+                        phase="EXPLORE",
+                        top_hooks=top_hooks,
+                        top_angles=top_angles,
+                        estimated_roas=1.2,
+                        confidence=0.0,
+                        evidence_count=0,
+                    )
+                    playbook_memory.upsert(pb)
+                _log.info("content_generated product=%s hook=%r angle=%s len=%d",
+                          product, hook, angle, len(script))
                 generated += 1
-                _log.info("content_generated product=%s angle=%s", product, angle)
             except Exception as gen_exc:
                 _log.warning("content_generate_failed product=%s error=%s", product, gen_exc)
 
-        return {"status": "ok", "generated": generated, "top_hooks": top_hooks[:3]}
+        return {"status": "ok", "generated": generated, "top_hooks": top_hooks}
     except Exception as exc:
         _log.exception("content_generation_failed error=%s", exc)
         return {"status": "error", "error": str(exc)}
@@ -285,19 +303,17 @@ def _run_metrics_ingestion() -> dict[str, Any]:
             calibration_store.record_outcome("blended", actual_roas=real_roas)
             _log.info("metrics_real_roas_recorded roas=%s", real_roas)
 
-        # TikTok ROAS for tracked campaigns (if token configured)
+        # TikTok ROAS for tracked campaigns — keyed to product via _active_campaigns
         try:
             from backend.integrations.tiktok_ads import fetch_roas, is_configured
-            if is_configured():
-                # Retrieve active campaign IDs from portfolio engine
-                from backend.decision.portfolio_engine import portfolio
-                campaign_ids = [str(k) for k in list(portfolio.keys())[:10] if k]
-                if campaign_ids:
-                    roas_map = fetch_roas(campaign_ids)
-                    metrics["tiktok_campaign_count"] = len(roas_map)
-                    for cid, roas in roas_map.items():
-                        calibration_store.record_outcome(cid, actual_roas=roas)
-                        _log.debug("metrics_tiktok_roas_recorded campaign=%s roas=%s", cid, roas)
+            campaign_ids = list(_active_campaigns.keys())[:10]
+            if campaign_ids and (is_configured() or True):   # dry-run also returns simulated data
+                roas_map = fetch_roas(campaign_ids)
+                metrics["tiktok_campaign_count"] = len(roas_map)
+                for cid, roas in roas_map.items():
+                    product = _active_campaigns.get(cid, cid)
+                    calibration_store.record_outcome(product, actual_roas=roas)
+                    _log.debug("metrics_tiktok_roas campaign=%s product=%s roas=%s", cid, product, roas)
         except Exception as exc:
             _log.debug("metrics_tiktok_failed error=%s", exc)
 

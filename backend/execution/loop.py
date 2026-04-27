@@ -57,6 +57,33 @@ _kill_set: set[str] = set()
 _real_roas_cache: float | None = None
 _real_data_counter: int = 0
 
+# Hook/angle pool — refreshed from PatternStore every 60 s, fallback to HOOKS
+_hook_pool:     list[str] = []
+_angle_pool:    list[str] = []
+_pool_ts:       float = 0.0
+_POOL_TTL:      float = 60.0
+_DEFAULT_ANGLES = ["problem-solution", "social-proof", "urgency", "curiosity", "authority"]
+
+
+def _refresh_pools() -> tuple[list[str], list[str]]:
+    global _hook_pool, _angle_pool, _pool_ts
+    import time as _time
+    if _hook_pool and (_time.time() - _pool_ts) < _POOL_TTL:
+        return _hook_pool, _angle_pool
+    try:
+        from core.content.patterns import pattern_store
+        hooks  = pattern_store.get_top_hooks(n=5)
+        angles = pattern_store.get_top_angles(n=5)
+    except Exception:
+        hooks, angles = [], []
+    if not hooks:
+        from core.creative.hooks import HOOKS
+        hooks = list(HOOKS)
+    if not angles:
+        angles = list(_DEFAULT_ANGLES)
+    _hook_pool, _angle_pool, _pool_ts = hooks, angles, _time.time()
+    return _hook_pool, _angle_pool
+
 
 def _simulate_environment():
     if random.random() < 0.05:
@@ -120,12 +147,16 @@ def execute(decisions, state):
         peak_capital = state.capital
     state._peak_capital = peak_capital
 
+    hook_pool, angle_pool = _refresh_pools()
     results = []
     for i, d in enumerate(decisions):
         action = d.get("action", {})
         structure = d.get("structure")
         campaign_id = str(action.get("campaign_id", "") or action.get("variant", ""))
         cost = round(budgets[i], 4)
+        hook  = hook_pool[i % len(hook_pool)]
+        angle = angle_pool[i % len(angle_pool)]
+        product = d.get("product_name", str(action.get("variant", "")))
 
         roas = _generate_roas()
         revenue = roas * cost
@@ -154,6 +185,9 @@ def execute(decisions, state):
         agent_metrics_registry.record_pnl("execution", revenue, cost)
 
         outcome = {
+            "product":       product,
+            "hook":          hook,
+            "angle":         angle,
             "roas":          round(roas, 4),
             "roas_6h":       round(max(0.01, roas * random.uniform(0.70, 0.95)), 4),
             "roas_12h":      round(max(0.01, roas * random.uniform(0.85, 1.05)), 4),
