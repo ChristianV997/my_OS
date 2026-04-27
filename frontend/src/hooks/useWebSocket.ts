@@ -1,8 +1,29 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { WsEvent } from "../types";
+import type { RuntimeEnvelope, WsEvent } from "../types";
 
-const WS_URL = `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws`;
+const WS_URL = `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws/events`;
 const RECONNECT_MS = [1000, 2000, 4000, 8000, 16000];
+
+function normalizeEvent(data: RuntimeEnvelope): WsEvent {
+  // replay-store hydration frames may arrive wrapped as:
+  // { event_id, type, payload: {...} }
+  // while legacy runtime frames arrive as raw payloads.
+  if (data.payload && typeof data.payload === "object") {
+    return {
+      ...data.payload,
+      event_id: data.event_id,
+      replay_hash: data.replay_hash,
+      sequence_id: data.sequence_id,
+      source: data.source,
+      event_version: data.event_version,
+      correlation_id: data.correlation_id,
+      type: String(data.type),
+      ts: Number(data.ts ?? Date.now() / 1000),
+    } as WsEvent;
+  }
+
+  return data as WsEvent;
+}
 
 export function useWebSocket(onMessage: (e: WsEvent) => void) {
   const [connected, setConnected] = useState(false);
@@ -12,7 +33,9 @@ export function useWebSocket(onMessage: (e: WsEvent) => void) {
   onMessageRef.current = onMessage;
 
   const connect = useCallback(() => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) return;
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      return;
+    }
 
     const ws = new WebSocket(WS_URL);
     wsRef.current = ws;
@@ -24,10 +47,11 @@ export function useWebSocket(onMessage: (e: WsEvent) => void) {
 
     ws.onmessage = (ev) => {
       try {
-        const data = JSON.parse(ev.data) as WsEvent;
-        onMessageRef.current(data);
+        const raw = JSON.parse(ev.data) as RuntimeEnvelope;
+        const normalized = normalizeEvent(raw);
+        onMessageRef.current(normalized);
       } catch {
-        /* ignore malformed frames */
+        // malformed frames are ignored to preserve runtime continuity
       }
     };
 
