@@ -35,6 +35,7 @@ DECISION_LOGGED      = "decision.logged"
 METRICS_INGESTED     = "metrics.ingested"    # engagement/retention/campaign metrics
 HEARTBEAT            = "heartbeat"           # periodic runtime liveness signal
 RUNTIME_CONSISTENCY  = "runtime.consistency" # validation failures / drift warnings
+CAMPAIGN_LAUNCHED    = "campaign.launched"   # campaign created; carries full attribution lineage
 
 # ── legacy aliases (frontend still uses these; keep until frontend migrated) ──
 

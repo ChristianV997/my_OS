@@ -41,8 +41,10 @@ TICK_INTERVAL   = float(os.getenv("ORCHESTRATOR_TICK_S", "10"))
 TOTAL_BUDGET    = float(os.getenv("ORCHESTRATOR_BUDGET", "500"))
 TOTAL_WORKERS   = int(os.getenv("ORCHESTRATOR_WORKERS", "4"))
 
-# Track launched TikTok campaigns so metrics ingestion can pair ROAS → product
-_active_campaigns: dict[str, str] = {}   # campaign_id → product_name
+# Full attribution lineage for every launched campaign (survives within process lifetime)
+# campaign_id → CampaignArtifact (product + hook + angle + phase + budget)
+from core.content.schemas import CampaignArtifact as _CampaignArtifact
+_campaign_artifacts: dict[str, _CampaignArtifact] = {}
 
 
 # ── worker dispatchers ────────────────────────────────────────────────────────
@@ -151,7 +153,8 @@ def _run_scaling() -> dict[str, Any]:
         # ── Path 2: Launch new campaigns from high-confidence playbooks ───────
         try:
             from core.content.playbook import playbook_memory
-            from backend.integrations.tiktok_ads import launch_from_playbook
+            from backend.integrations.tiktok_ads import launch_from_playbook, _DRY_RUN
+            from backend.events.emitter import emit_campaign_launched
             phase = "SCALE"
             try:
                 phase = phase_controller.current.value
@@ -165,7 +168,30 @@ def _run_scaling() -> dict[str, Any]:
                 if result.get("status") != "error":
                     cid = result.get("campaign_id", "")
                     if cid:
-                        _active_campaigns[cid] = pb.product
+                        hook  = (pb.top_hooks[0]  if pb.top_hooks  else "")
+                        angle = (pb.top_angles[0] if pb.top_angles else "")
+                        artifact = _CampaignArtifact(
+                            campaign_id    = cid,
+                            adgroup_id     = result.get("adgroup_id", ""),
+                            ad_ids         = result.get("ad_ids", []),
+                            product        = pb.product,
+                            hook           = hook,
+                            angle          = angle,
+                            phase          = phase,
+                            estimated_roas = pb.estimated_roas,
+                            budget         = result.get("budget", 0.0),
+                            dry_run        = result.get("dry_run", True),
+                        )
+                        _campaign_artifacts[cid] = artifact
+                        emit_campaign_launched(
+                            campaign_id=cid,
+                            product=pb.product,
+                            hook=hook,
+                            angle=angle,
+                            phase=phase,
+                            budget=artifact.budget,
+                            dry_run=artifact.dry_run,
+                        )
                     launched += 1
                     _log.info("playbook_launched product=%s confidence=%s campaign=%s",
                               pb.product, confidence, cid)
@@ -303,17 +329,38 @@ def _run_metrics_ingestion() -> dict[str, Any]:
             calibration_store.record_outcome("blended", actual_roas=real_roas)
             _log.info("metrics_real_roas_recorded roas=%s", real_roas)
 
-        # TikTok ROAS for tracked campaigns — keyed to product via _active_campaigns
+        # TikTok ROAS for tracked campaigns — full lineage via _campaign_artifacts
         try:
-            from backend.integrations.tiktok_ads import fetch_roas, is_configured
-            campaign_ids = list(_active_campaigns.keys())[:10]
-            if campaign_ids and (is_configured() or True):   # dry-run also returns simulated data
+            from backend.integrations.tiktok_ads import fetch_roas
+            from core.content.patterns import extract_patterns, pattern_store
+            from core.content.feedback import classify_video, engagement_score
+
+            campaign_ids = list(_campaign_artifacts.keys())[:10]
+            if campaign_ids:
                 roas_map = fetch_roas(campaign_ids)
                 metrics["tiktok_campaign_count"] = len(roas_map)
                 for cid, roas in roas_map.items():
-                    product = _active_campaigns.get(cid, cid)
+                    artifact = _campaign_artifacts.get(cid)
+                    product  = artifact.product if artifact else cid
+                    # ── CalibrationStore: record per-product outcome ───────────
                     calibration_store.record_outcome(product, actual_roas=roas)
-                    _log.debug("metrics_tiktok_roas campaign=%s product=%s roas=%s", cid, product, roas)
+                    # ── PatternStore: backfill from real TikTok ROAS ──────────
+                    # Build a synthetic classified event so pattern learning sees
+                    # real campaign performance, not just simulated outcomes.
+                    if artifact:
+                        synth = {
+                            "product":   artifact.product,
+                            "hook":      artifact.hook,
+                            "angle":     artifact.angle,
+                            "roas":      roas,
+                            "ctr":       0.0,   # not available from ROAS endpoint
+                            "cvr":       0.0,
+                            "env_regime": artifact.phase,
+                        }
+                        synth["label"]     = classify_video(synth)
+                        synth["eng_score"] = engagement_score(synth)
+                        pattern_store.update(extract_patterns([synth]))
+                    _log.debug("metrics_tiktok campaign=%s product=%s roas=%s", cid, product, roas)
         except Exception as exc:
             _log.debug("metrics_tiktok_failed error=%s", exc)
 

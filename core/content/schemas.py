@@ -1,6 +1,43 @@
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass, field
+
+
+@dataclass
+class CampaignArtifact:
+    """Serializable record of a launched campaign with full attribution lineage.
+
+    Created at launch time by _run_scaling() and stored in _campaign_artifacts.
+    Consumed by _run_metrics_ingestion() to pair real ROAS back to the hook
+    and angle that drove the campaign, closing the metrics→PatternStore loop.
+    """
+    campaign_id:    str
+    adgroup_id:     str
+    ad_ids:         list[str]
+    product:        str
+    hook:           str
+    angle:          str
+    phase:          str
+    estimated_roas: float
+    budget:         float
+    launched_at:    float = field(default_factory=time.time)
+    dry_run:        bool  = True
+
+    def to_dict(self) -> dict:
+        return {
+            "campaign_id":    self.campaign_id,
+            "adgroup_id":     self.adgroup_id,
+            "ad_ids":         self.ad_ids,
+            "product":        self.product,
+            "hook":           self.hook,
+            "angle":          self.angle,
+            "phase":          self.phase,
+            "estimated_roas": self.estimated_roas,
+            "budget":         self.budget,
+            "launched_at":    self.launched_at,
+            "dry_run":        self.dry_run,
+        }
 
 
 @dataclass

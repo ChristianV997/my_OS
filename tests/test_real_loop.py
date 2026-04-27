@@ -5,8 +5,8 @@ Covers the three critical data-flow fixes:
   2. PatternStore learns from outcomes → content generation uses real patterns
   3. Campaign tracking ties TikTok ROAS back to specific products
   4. _run_content_generation uses real signal products, never skips on cold start
-  5. _active_campaigns populated after launch_from_playbook
-  6. _run_metrics_ingestion records per-product outcomes via _active_campaigns
+  5. _campaign_artifacts populated after launch_from_playbook
+  6. _run_metrics_ingestion records per-product outcomes via _campaign_artifacts
   7. Full signal → content → deploy → metrics → calibration round-trip
 """
 import time
@@ -136,11 +136,11 @@ def test_hook_pool_falls_back_to_hooks_module_when_empty():
 # ── Fix 3: campaign tracking ──────────────────────────────────────────────────
 
 def test_active_campaigns_populated_after_run_scaling():
-    """After _run_scaling launches a playbook, _active_campaigns is non-empty."""
+    """After _run_scaling launches a playbook, _campaign_artifacts is non-empty."""
+    from unittest.mock import patch
     import orchestrator.main as orch
+    from core.content.playbook import Playbook
 
-    # Seed a high-confidence playbook
-    from core.content.playbook import playbook_memory, Playbook
     pb = Playbook(
         product="test_product_loop",
         phase="SCALE",
@@ -150,19 +150,21 @@ def test_active_campaigns_populated_after_run_scaling():
         confidence=0.8,
         evidence_count=20,
     )
-    playbook_memory.upsert(pb)
-    orch._active_campaigns.clear()
+    orch._campaign_artifacts.clear()
 
-    result = orch._run_scaling()
+    # Isolate from other tests' playbook state
+    with patch("core.content.playbook.playbook_memory.all", return_value=[pb]):
+        result = orch._run_scaling()
+
     assert result["status"] in ("ok", "skipped", "error")
-    # Even in dry-run mode, campaigns should be tracked
     if result.get("launched", 0) > 0:
-        assert len(orch._active_campaigns) > 0
-        assert "test_product_loop" in orch._active_campaigns.values()
+        assert len(orch._campaign_artifacts) > 0
+        products = {a.product for a in orch._campaign_artifacts.values()}
+        assert "test_product_loop" in products
 
 
 def test_active_campaigns_maps_campaign_to_product():
-    """Campaign IDs in _active_campaigns must map to the product that launched them."""
+    """Campaign IDs in _campaign_artifacts must carry a non-empty product."""
     import orchestrator.main as orch
     from core.content.playbook import playbook_memory, Playbook
 
@@ -176,13 +178,13 @@ def test_active_campaigns_maps_campaign_to_product():
         evidence_count=30,
     )
     playbook_memory.upsert(pb)
-    orch._active_campaigns.clear()
+    orch._campaign_artifacts.clear()
 
     orch._run_scaling()
 
-    for product in orch._active_campaigns.values():
-        assert isinstance(product, str)
-        assert len(product) > 0
+    for artifact in orch._campaign_artifacts.values():
+        assert isinstance(artifact.product, str)
+        assert len(artifact.product) > 0
 
 
 # ── Fix 4: content generation uses real signals ───────────────────────────────
@@ -231,11 +233,12 @@ def test_run_content_generation_seeds_playbook_memory():
         pb_mod.playbook_memory = playbook_memory
 
 
-# ── Fix 5: metrics ingestion uses _active_campaigns ──────────────────────────
+# ── Fix 5: metrics ingestion uses _campaign_artifacts ────────────────────────
 
 def test_run_metrics_ingestion_records_per_product(monkeypatch):
-    """When _active_campaigns is populated, outcomes are recorded per product."""
+    """When _campaign_artifacts is populated, outcomes are recorded per product."""
     import orchestrator.main as orch
+    from core.content.schemas import CampaignArtifact
     from simulation.calibration import CalibrationStore
     import simulation.calibration as cal_mod
 
@@ -243,9 +246,17 @@ def test_run_metrics_ingestion_records_per_product(monkeypatch):
     original_store = cal_mod.calibration_store
     cal_mod.calibration_store = fresh_store
 
-    orch._active_campaigns.clear()
-    orch._active_campaigns["dry_123"] = "wireless_earbuds"
-    orch._active_campaigns["dry_456"] = "led_strips"
+    orch._campaign_artifacts.clear()
+    orch._campaign_artifacts["dry_123"] = CampaignArtifact(
+        campaign_id="dry_123", adgroup_id="ag1", ad_ids=["ad1"],
+        product="wireless_earbuds", hook="hook_we", angle="angle_we",
+        phase="SCALE", estimated_roas=1.5, budget=50.0, dry_run=True,
+    )
+    orch._campaign_artifacts["dry_456"] = CampaignArtifact(
+        campaign_id="dry_456", adgroup_id="ag2", ad_ids=["ad2"],
+        product="led_strips", hook="hook_ls", angle="angle_ls",
+        phase="SCALE", estimated_roas=1.8, budget=60.0, dry_run=True,
+    )
 
     try:
         result = orch._run_metrics_ingestion()
@@ -253,11 +264,10 @@ def test_run_metrics_ingestion_records_per_product(monkeypatch):
         # If metrics ran, at least the campaign tracking didn't raise
         if result["status"] == "ok" and result.get("metrics", {}).get("tiktok_campaign_count", 0) > 0:
             summary = fresh_store.summary()
-            # Should have tried to record outcomes for our products
             assert summary["total_records"] >= 0  # just no exception
     finally:
         cal_mod.calibration_store = original_store
-        orch._active_campaigns.clear()
+        orch._campaign_artifacts.clear()
 
 
 # ── Full round-trip: signal → classify → pattern → content ────────────────────

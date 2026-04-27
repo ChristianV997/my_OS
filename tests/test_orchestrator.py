@@ -28,7 +28,8 @@ def test_run_feedback_collection_skips_when_no_module():
 
 def test_run_scaling_skips_when_ajo_not_configured():
     from orchestrator.main import _run_scaling
-    with patch("backend.integrations.adobe_ajo.is_configured", return_value=False):
+    with patch("backend.integrations.adobe_ajo.is_configured", return_value=False), \
+         patch("core.content.playbook.playbook_memory.all", return_value=[]):
         result = _run_scaling()
     assert result["status"] == "skipped"
 

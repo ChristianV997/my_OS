@@ -165,6 +165,42 @@ def emit_heartbeat(source: str = "system") -> None:
         _log.warning("emit_heartbeat_failed error=%s", exc)
 
 
+def emit_campaign_launched(
+    campaign_id: str,
+    product: str,
+    hook: str,
+    angle: str,
+    phase: str,
+    budget: float,
+    dry_run: bool = True,
+    source: str = "orchestrator",
+) -> None:
+    """Emit a campaign.launched event carrying full attribution lineage.
+
+    Routes through the broker so the launch is recorded in the durable
+    RuntimeReplayStore and visible to the dashboard and audit trail.
+    """
+    try:
+        import time
+        from backend.events.schemas import CAMPAIGN_LAUNCHED
+        _broker().publish(
+            event_type=CAMPAIGN_LAUNCHED,
+            payload={
+                "campaign_id": campaign_id,
+                "product":     product,
+                "hook":        hook,
+                "angle":       angle,
+                "phase":       phase,
+                "budget":      budget,
+                "dry_run":     dry_run,
+                "ts":          time.time(),
+            },
+            source=source,
+        )
+    except Exception as exc:
+        _log.warning("emit_campaign_launched_failed campaign=%s error=%s", campaign_id, exc)
+
+
 def emit_runtime_consistency(
     issues: list[str],
     source: str = "runtime",

@@ -1,7 +1,14 @@
 from __future__ import annotations
 
+import json
+import logging
+import os
 from collections import defaultdict
 from threading import Lock
+
+_log = logging.getLogger(__name__)
+
+_PATTERNSTORE_PATH = os.getenv("PATTERNSTORE_PATH", "state/patternstore.json")
 
 
 def extract_patterns(events: list[dict]) -> dict:
@@ -72,6 +79,37 @@ class PatternStore:
             for k, v in patterns.get("regime_scores", {}).items():
                 prev = self._regime_scores.get(k)
                 self._regime_scores[k] = round((prev + v) / 2, 4) if prev is not None else v
+        self._persist()
+
+    def snapshot(self) -> dict:
+        """Return a JSON-safe dict of current scores for persistence."""
+        with self._lock:
+            return {
+                "hook_scores":   dict(self._hook_scores),
+                "angle_scores":  dict(self._angle_scores),
+                "regime_scores": dict(self._regime_scores),
+            }
+
+    def restore(self, data: dict) -> None:
+        """Load hook/angle/regime scores from a previously saved snapshot."""
+        with self._lock:
+            self._hook_scores   = {k: float(v) for k, v in data.get("hook_scores",   {}).items()}
+            self._angle_scores  = {k: float(v) for k, v in data.get("angle_scores",  {}).items()}
+            self._regime_scores = {k: float(v) for k, v in data.get("regime_scores", {}).items()}
+
+    def _persist(self) -> None:
+        """Write current snapshot to PATTERNSTORE_PATH (fail-silent)."""
+        path = _PATTERNSTORE_PATH
+        if not path:
+            return
+        try:
+            os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+            tmp = path + ".tmp"
+            with open(tmp, "w") as f:
+                json.dump(self.snapshot(), f)
+            os.replace(tmp, path)
+        except Exception as exc:
+            _log.debug("patternstore_persist_failed path=%s error=%s", path, exc)
 
     def get_top_hooks(self, n: int = 3) -> list[str]:
         with self._lock:
@@ -98,3 +136,23 @@ class PatternStore:
 
 
 pattern_store = PatternStore()
+
+
+def _load_patternstore() -> None:
+    """Load persisted pattern scores on startup (fail-silent)."""
+    path = _PATTERNSTORE_PATH
+    if not path or not os.path.exists(path):
+        return
+    try:
+        with open(path) as f:
+            data = json.load(f)
+        pattern_store.restore(data)
+        _log.info("patternstore_loaded path=%s hooks=%d angles=%d",
+                  path,
+                  len(data.get("hook_scores", {})),
+                  len(data.get("angle_scores", {})))
+    except Exception as exc:
+        _log.debug("patternstore_load_failed path=%s error=%s", path, exc)
+
+
+_load_patternstore()
