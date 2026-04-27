@@ -102,6 +102,10 @@ class ReplayBuffer:
         with self._lock:
             return [e for e in self._buf if e.ts >= ts]
 
+    def __len__(self) -> int:
+        with self._lock:
+            return len(self._buf)
+
 
 class PubSubBroker:
 
@@ -154,6 +158,128 @@ class PubSubBroker:
             )
 
         return env.event_id
+
+    # ── typed emit helpers ────────────────────────────────────────────────────
+
+    def emit_tick(
+        self,
+        phase: str,
+        avg_roas: float = 0.0,
+        capital: float = 0.0,
+        win_rate: float = 0.0,
+        signal_count: int = 0,
+        source: str = "orchestrator",
+    ) -> str:
+        return self.publish(
+            ORCHESTRATOR_TICK,
+            {"type": LEGACY_TICK, "phase": phase, "avg_roas": avg_roas,
+             "capital": capital, "win_rate": win_rate,
+             "signal_count": signal_count, "ts": time.time()},
+            source=source,
+        )
+
+    def emit_snapshot(self, snap: Any, source: str = "api") -> str:
+        from dataclasses import asdict
+        payload = asdict(snap) if hasattr(snap, "__dataclass_fields__") else dict(snap)
+        payload.setdefault("type", LEGACY_SNAPSHOT)
+        return self.publish(RUNTIME_SNAPSHOT, payload, source=source)
+
+    def emit_worker_health(
+        self,
+        worker: str,
+        status: str,
+        phase: str = "",
+        source: str = "orchestrator",
+        **extra: Any,
+    ) -> str:
+        return self.publish(
+            WORKER_HEALTH,
+            {"type": LEGACY_WORKER, "worker": worker, "status": status,
+             "phase": phase, "ts": time.time(), **extra},
+            source=source,
+        )
+
+    def emit_task_inventory(self, inv: dict, source: str = "system") -> str:
+        return self.publish(TASK_INVENTORY, {**inv, "ts": time.time()}, source=source)
+
+    def emit_signals_updated(
+        self, signals: list[dict], source: str = "api"
+    ) -> str:
+        return self.publish(
+            SIGNALS_UPDATED,
+            {"type": SIGNALS_UPDATED, "signals": signals,
+             "count": len(signals), "ts": time.time()},
+            source=source,
+        )
+
+    def emit_simulation_completed(
+        self,
+        scores: list[dict],
+        top_product: str | None = None,
+        source: str = "simulation",
+    ) -> str:
+        return self.publish(
+            SIMULATION_COMPLETED,
+            {"type": SIMULATION_COMPLETED, "scores": scores,
+             "top_product": top_product, "signals_scored": len(scores),
+             "ts": time.time()},
+            source=source,
+        )
+
+    def emit_anomaly(
+        self, level: str, message: str, source: str = "system"
+    ) -> str:
+        return self.publish(
+            ANOMALY_DETECTED,
+            {"type": ANOMALY_DETECTED, "level": level,
+             "message": message, "ts": time.time()},
+            source=source,
+        )
+
+    def emit_decision(
+        self,
+        product: str,
+        roas: float,
+        label: str,
+        hook: str = "",
+        angle: str = "",
+        source: str = "api",
+        **extra: Any,
+    ) -> str:
+        return self.publish(
+            DECISION_LOGGED,
+            {"type": DECISION_LOGGED, "product": product, "roas": roas,
+             "label": label, "hook": hook, "angle": angle,
+             "ts": time.time(), **extra},
+            source=source,
+        )
+
+    def emit_metrics_ingested(
+        self, source: str, metrics: dict[str, Any]
+    ) -> str:
+        return self.publish(
+            METRICS_INGESTED,
+            {"type": METRICS_INGESTED, "source": source,
+             "metrics": metrics, "ts": time.time()},
+            source=source,
+        )
+
+    def emit_heartbeat(self, source: str = "system") -> str:
+        return self.publish(
+            HEARTBEAT,
+            {"type": HEARTBEAT, "source": source, "ts": time.time()},
+            source=source,
+        )
+
+    def emit_runtime_consistency(
+        self, issues: list[str], source: str = "runtime"
+    ) -> str:
+        return self.publish(
+            RUNTIME_CONSISTENCY,
+            {"type": RUNTIME_CONSISTENCY, "issues": issues,
+             "source": source, "ts": time.time()},
+            source=source,
+        )
 
 
 broker = PubSubBroker(replay_size=200)
