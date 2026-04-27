@@ -14,6 +14,9 @@ import { RuntimeGraph } from "./RuntimeGraph";
 import { DeploymentTimeline } from "./DeploymentTimeline";
 import { AgentActivity } from "./AgentActivity";
 import { InventoryOps } from "./InventoryOps";
+import { ClaudeStrategyFeed } from "./ClaudeStrategyFeed";
+import { ReplayInspector } from "./ReplayInspector";
+import { OperatorQuickActions } from "./OperatorQuickActions";
 
 interface Props {
   snapshot: RuntimeSnapshot | null;
@@ -289,6 +292,12 @@ export function CommandCenter({ snapshot, connected }: Props) {
         <DeploymentTimeline />
         <AgentActivity />
         <InventoryOps />
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        <ClaudeStrategyFeed />
+        <ReplayInspector />
+        <OperatorQuickActions />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
