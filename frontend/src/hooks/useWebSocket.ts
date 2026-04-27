@@ -3,11 +3,10 @@ import type { RuntimeEnvelope, WsEvent } from "../types";
 
 const WS_URL = `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws/events`;
 const RECONNECT_MS = [1000, 2000, 4000, 8000, 16000];
+const FLUSH_MS = 50;
+const MAX_BATCH = 32;
 
 function normalizeEvent(data: RuntimeEnvelope): WsEvent {
-  // replay-store hydration frames may arrive wrapped as:
-  // { event_id, type, payload: {...} }
-  // while legacy runtime frames arrive as raw payloads.
   if (data.payload && typeof data.payload === "object") {
     return {
       ...data.payload,
@@ -29,8 +28,45 @@ export function useWebSocket(onMessage: (e: WsEvent) => void) {
   const [connected, setConnected] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
   const attemptsRef = useRef(0);
+  const queueRef = useRef<WsEvent[]>([]);
+  const flushTimerRef = useRef<number | null>(null);
   const onMessageRef = useRef(onMessage);
   onMessageRef.current = onMessage;
+
+  const flushQueue = useCallback(() => {
+    const queued = queueRef.current.splice(0, MAX_BATCH);
+
+    if (!queued.length) {
+      return;
+    }
+
+    queued.sort((a, b) => {
+      const sa = typeof (a as RuntimeEnvelope).sequence_id === "number"
+        ? Number((a as RuntimeEnvelope).sequence_id)
+        : Number.MAX_SAFE_INTEGER;
+
+      const sb = typeof (b as RuntimeEnvelope).sequence_id === "number"
+        ? Number((b as RuntimeEnvelope).sequence_id)
+        : Number.MAX_SAFE_INTEGER;
+
+      return sa - sb;
+    });
+
+    for (const event of queued) {
+      onMessageRef.current(event);
+    }
+  }, []);
+
+  const scheduleFlush = useCallback(() => {
+    if (flushTimerRef.current !== null) {
+      return;
+    }
+
+    flushTimerRef.current = window.setTimeout(() => {
+      flushTimerRef.current = null;
+      flushQueue();
+    }, FLUSH_MS);
+  }, [flushQueue]);
 
   const connect = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -48,8 +84,8 @@ export function useWebSocket(onMessage: (e: WsEvent) => void) {
     ws.onmessage = (ev) => {
       try {
         const raw = JSON.parse(ev.data) as RuntimeEnvelope;
-        const normalized = normalizeEvent(raw);
-        onMessageRef.current(normalized);
+        queueRef.current.push(normalizeEvent(raw));
+        scheduleFlush();
       } catch {
         // malformed frames are ignored to preserve runtime continuity
       }
@@ -63,12 +99,27 @@ export function useWebSocket(onMessage: (e: WsEvent) => void) {
     };
 
     ws.onerror = () => ws.close();
-  }, []);
+  }, [scheduleFlush]);
 
   useEffect(() => {
     connect();
-    return () => wsRef.current?.close();
+
+    return () => {
+      if (flushTimerRef.current !== null) {
+        window.clearTimeout(flushTimerRef.current);
+      }
+
+      wsRef.current?.close();
+    };
   }, [connect]);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      flushQueue();
+    }, FLUSH_MS);
+
+    return () => window.clearInterval(interval);
+  }, [flushQueue]);
 
   return { connected };
 }
