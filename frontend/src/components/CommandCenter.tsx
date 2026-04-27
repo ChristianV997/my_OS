@@ -11,6 +11,9 @@ import {
 import { useRuntimeStore } from "../runtimeStore";
 import type { RuntimeSnapshot, RuntimeEnvelope } from "../types";
 import { RuntimeGraph } from "./RuntimeGraph";
+import { DeploymentTimeline } from "./DeploymentTimeline";
+import { AgentActivity } from "./AgentActivity";
+import { InventoryOps } from "./InventoryOps";
 
 interface Props {
   snapshot: RuntimeSnapshot | null;
@@ -280,6 +283,12 @@ export function CommandCenter({ snapshot, connected }: Props) {
             </ResponsiveContainer>
           </div>
         </div>
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        <DeploymentTimeline />
+        <AgentActivity />
+        <InventoryOps />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
