@@ -116,20 +116,31 @@ export interface RuntimeConsistencyEvent {
   ts: number;
 }
 
-// Worker health — legacy "worker" and canonical "worker.health" both accepted
+export interface RuntimeEnvelope {
+  event_id?: string;
+  type: string;
+  ts: number;
+  source?: string;
+  event_version?: number;
+  correlation_id?: string | null;
+  sequence_id?: number;
+  replay_hash?: string;
+  payload?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
 export type WorkerEvent =
-  | { type: "worker";        worker: string; phase: string; status: string; ts: number }
+  | { type: "worker"; worker: string; phase: string; status: string; ts: number }
   | { type: "worker.health"; worker: string; phase: string; status: string; ts: number };
 
-// Tick — legacy "tick" and canonical "orchestrator.tick" both accepted
 export type TickEvent =
-  | { type: "tick";             phase: string; avg_roas: number; capital: number; win_rate?: number; ts: number }
+  | { type: "tick"; phase: string; avg_roas: number; capital: number; win_rate?: number; ts: number }
   | { type: "orchestrator.tick"; phase: string; avg_roas: number; capital: number; win_rate?: number; ts: number };
 
-// Snapshot — legacy "snapshot" and canonical "runtime.snapshot" both accepted
 export type SnapshotEvent = RuntimeSnapshot & { type: "snapshot" | "runtime.snapshot" };
 
 export type WsEvent =
+  | RuntimeEnvelope
   | SnapshotEvent
   | WorkerEvent
   | TickEvent
