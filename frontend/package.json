@@ -1,6 +1,6 @@
 {
   "name": "marketos-dashboard",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -11,7 +11,14 @@
   "dependencies": {
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "recharts": "^2.12.7"
+    "react-router-dom": "^6.26.0",
+    "@tanstack/react-query": "^5.51.0",
+    "zustand": "^4.5.4",
+    "recharts": "^2.12.7",
+    "lucide-react": "^0.411.0",
+    "clsx": "^2.1.1",
+    "tailwind-merge": "^2.4.0",
+    "date-fns": "^3.6.0"
   },
   "devDependencies": {
     "@types/react": "^18.3.3",
