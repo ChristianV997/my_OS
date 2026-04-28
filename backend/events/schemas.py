@@ -37,6 +37,15 @@ HEARTBEAT            = "heartbeat"           # periodic runtime liveness signal
 RUNTIME_CONSISTENCY  = "runtime.consistency" # validation failures / drift warnings
 CAMPAIGN_LAUNCHED    = "campaign.launched"   # campaign created; carries full attribution lineage
 
+# ── vector cognition events ───────────────────────────────────────────────────
+
+VECTOR_INDEX        = "vector.index"        # record indexed into a collection
+VECTOR_SEARCH       = "vector.search"       # semantic search executed
+VECTOR_SIMILARITY   = "vector.similarity"   # pairwise similarity computed
+VECTOR_CLUSTER      = "vector.cluster"      # clustering operation completed
+VECTOR_INDEX_ERROR  = "vector.index_error"  # indexing failure
+VECTOR_SEARCH_ERROR = "vector.search_error" # search failure
+
 # ── inference kernel events ───────────────────────────────────────────────────
 
 INFERENCE_REQUEST      = "inference.request"       # provider dispatch
