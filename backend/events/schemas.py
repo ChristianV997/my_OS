@@ -37,6 +37,13 @@ HEARTBEAT            = "heartbeat"           # periodic runtime liveness signal
 RUNTIME_CONSISTENCY  = "runtime.consistency" # validation failures / drift warnings
 CAMPAIGN_LAUNCHED    = "campaign.launched"   # campaign created; carries full attribution lineage
 
+# ── inference kernel events ───────────────────────────────────────────────────
+
+INFERENCE_COMPLETED        = "inference.completed"          # successful model call (all providers)
+INFERENCE_FAILED           = "inference.failed"             # provider call failed (before fallback)
+INFERENCE_FALLBACK         = "inference.fallback"           # fallback provider activated
+EMBEDDING_COMPLETED        = "inference.embedding.completed" # embedding batch completed
+
 # ── legacy aliases (frontend still uses these; keep until frontend migrated) ──
 
 # "tick"     → ORCHESTRATOR_TICK (frontend reads phase/avg_roas/capital)
