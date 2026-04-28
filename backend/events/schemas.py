@@ -37,6 +37,16 @@ HEARTBEAT            = "heartbeat"           # periodic runtime liveness signal
 RUNTIME_CONSISTENCY  = "runtime.consistency" # validation failures / drift warnings
 CAMPAIGN_LAUNCHED    = "campaign.launched"   # campaign created; carries full attribution lineage
 
+# ── inference kernel events ───────────────────────────────────────────────────
+
+INFERENCE_REQUEST      = "inference.request"       # provider dispatch
+INFERENCE_RESPONSE     = "inference.response"      # provider response (success or error)
+INFERENCE_FALLBACK     = "inference.fallback"      # provider fallback triggered
+INFERENCE_STREAM_START = "inference.stream_start"  # streaming session started
+INFERENCE_STREAM_END   = "inference.stream_end"    # streaming session completed
+INFERENCE_EMBED        = "inference.embed"         # embedding call completed
+INFERENCE_TOKEN        = "inference.token"         # individual streamed token (high-frequency)
+
 # ── legacy aliases (frontend still uses these; keep until frontend migrated) ──
 
 # "tick"     → ORCHESTRATOR_TICK (frontend reads phase/avg_roas/capital)
