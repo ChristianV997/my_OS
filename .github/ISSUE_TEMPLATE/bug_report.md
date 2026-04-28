@@ -1,38 +1,54 @@
 ---
-name: Bug report
-about: Create a report to help us improve
-title: ''
-labels: ''
+name: Bug Report
+about: Report a defect or unexpected behaviour
+title: '[BUG] '
+labels: 'needs-review'
 assignees: ''
 
 ---
 
-**Describe the bug**
-A clear and concise description of what the bug is.
+## Describe the Bug
+<!-- A clear and concise description of what the bug is. -->
 
-**To Reproduce**
-Steps to reproduce the behavior:
-1. Go to '...'
-2. Click on '....'
-3. Scroll down to '....'
-4. See error
+## Steps to Reproduce
+1.
+2.
+3.
 
-**Expected behavior**
-A clear and concise description of what you expected to happen.
+## Expected Behaviour
+<!-- What should have happened? -->
 
-**Screenshots**
-If applicable, add screenshots to help explain your problem.
+## Actual Behaviour
+<!-- What actually happened? Include error messages, stack traces, or log snippets. -->
 
-**Desktop (please complete the following information):**
- - OS: [e.g. iOS]
- - Browser [e.g. chrome, safari]
- - Version [e.g. 22]
+## Affected Systems
+- [ ] Orchestrator
+- [ ] Backend / API
+- [ ] Frontend
+- [ ] Connectors
+- [ ] Agents
+- [ ] Telemetry
+- [ ] Persistence / State
+- [ ] Other: ___
 
-**Smartphone (please complete the following information):**
- - Device: [e.g. iPhone6]
- - OS: [e.g. iOS8.1]
- - Browser [e.g. stock browser, safari]
- - Version [e.g. 22]
+## Replay Impact
+**Does this bug affect replay restoration?** Yes / No / Unknown
+<!-- If yes, describe the sequence_id or replay_hash behaviour observed. -->
 
-**Additional context**
-Add any other context about the problem here.
+## Environment
+- Branch:
+- Commit SHA:
+- Python / Node version:
+- OS:
+
+## Screenshots / Logs
+<!-- Attach relevant screenshots or log excerpts. -->
+
+## Risks
+<!-- What is the blast radius if this is not fixed? -->
+
+## Acceptance Criteria
+<!-- How will we know this bug is fixed? -->
+
+- [ ]
+- [ ]
