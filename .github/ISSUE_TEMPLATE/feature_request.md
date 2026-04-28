@@ -1,20 +1,48 @@
 ---
-name: Feature request
-about: Suggest an idea for this project
-title: ''
-labels: ''
+name: Feature Request
+about: Propose a new capability or enhancement
+title: '[FEATURE] '
+labels: 'needs-review'
 assignees: ''
 
 ---
 
-**Is your feature request related to a problem? Please describe.**
-A clear and concise description of what the problem is. Ex. I'm always frustrated when [...]
+## Objective
+<!-- What is the goal of this feature? Be specific and outcome-focused. -->
 
-**Describe the solution you'd like**
-A clear and concise description of what you want to happen.
+## Scope
+<!-- What systems, modules, or layers does this feature touch? -->
 
-**Describe alternatives you've considered**
-A clear and concise description of any alternative solutions or features you've considered.
+## Affected Systems
+<!-- List all affected subsystems (e.g. orchestrator, backend API, frontend, connectors, agents) -->
 
-**Additional context**
-Add any other context or screenshots about the feature request here.
+- [ ] Orchestrator
+- [ ] Backend / API
+- [ ] Frontend
+- [ ] Connectors
+- [ ] Agents
+- [ ] Telemetry
+- [ ] Persistence / State
+- [ ] Other: ___
+
+## Replay Impact
+<!-- Does this change affect replay safety? If yes, describe how replay-hash or sequence_id handling changes. -->
+
+**Replay-safe:** Yes / No / N/A
+<!-- If No, explain mitigation: -->
+
+## Risks
+<!-- What could go wrong? List edge cases, race conditions, or compatibility hazards. -->
+
+## Acceptance Criteria
+<!-- Bullet list of verifiable, testable conditions for this feature to be considered complete. -->
+
+- [ ]
+- [ ]
+- [ ]
+
+## Telemetry Implications
+<!-- Does this feature require new events, metrics, or websocket payloads? Describe envelope changes. -->
+
+## Additional Context
+<!-- Screenshots, diagrams, or references to related issues/PRs. -->
