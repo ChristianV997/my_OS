@@ -41,6 +41,9 @@ openai>=1.0.0          # OpenAI provider (cloud completions + embeddings)
 #   pip install vllm             # vLLM: high-throughput GPU inference server
 #   pip install llama-cpp-python # llama.cpp: CPU-only GGUF inference
 
+# ── vector cognition fabric ───────────────────────────────────────────────────
+qdrant-client>=1.9.0   # Qdrant vector store (in-memory fallback used without Docker)
+
 # ── dev / test ────────────────────────────────────────────────────────────────
 pytest
 pytest-asyncio
