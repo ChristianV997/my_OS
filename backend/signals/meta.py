@@ -2,7 +2,7 @@
 from __future__ import annotations
 import hashlib
 from datetime import datetime, timezone
-from .base import BaseSignal
+from .base import BaseSignal, validate_signal
 
 _TEXTS = [
     "Just hit $10k/month using this exact strategy — sharing it all",
@@ -57,7 +57,7 @@ def ingest_meta(query: str = "facebook trending") -> list[BaseSignal]:
         raw_eng   = (reactions * 1.0 + shares * 3.0 + comments * 2.0) / max(reach, 1)
         engagement = min(1.0, round(raw_eng, 4))
         post_id = f"{h % 10**15:015d}"
-        signals.append(BaseSignal(
+        sig = BaseSignal(
             source="meta",
             raw_text=text,
             engagement=engagement,
@@ -65,5 +65,8 @@ def ingest_meta(query: str = "facebook trending") -> list[BaseSignal]:
             timestamp=base_ts.isoformat(),
             url=f"https://www.facebook.com/permalink.php?story_fbid={post_id}",
             external_id=f"fb_{post_id}",
-        ))
+        )
+        if not validate_signal(sig):
+            continue
+        signals.append(sig)
     return signals

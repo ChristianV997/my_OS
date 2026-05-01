@@ -2,7 +2,7 @@
 from __future__ import annotations
 import hashlib
 from datetime import datetime, timezone
-from .base import BaseSignal
+from .base import BaseSignal, validate_signal
 
 _TEXTS = [
     "I tried every side hustle for 30 days — results",
@@ -53,10 +53,15 @@ def ingest_youtube(query: str = "make money online") -> list[BaseSignal]:
         views    = (h % 2_000_000) + 50_000
         likes    = ((_det_hash(query, i + 100)) % 80_000) + 2_000
         comments = ((_det_hash(query, i + 200)) % 8_000) + 200
-        raw_eng  = (likes * 1.2 + comments * 2.5) / max(views, 1)
-        engagement = min(1.0, round(raw_eng, 4))
+        # Normalize each factor to [0, 1] then combine.
+        # Inverse-view factor rewards channels with smaller but highly engaged audiences.
+        likes_norm    = min(1.0, likes    / 80_000.0)
+        comments_norm = min(1.0, comments / 8_000.0)
+        views_factor  = 1.0 - min(1.0, views / 2_000_000.0)
+        raw_eng       = likes_norm * 0.50 + comments_norm * 0.30 + views_factor * 0.20
+        engagement    = min(1.0, round(raw_eng, 4))
         vid_id = f"{h % 10**11:011d}"
-        signals.append(BaseSignal(
+        sig = BaseSignal(
             source="youtube",
             raw_text=text,
             engagement=engagement,
@@ -64,5 +69,8 @@ def ingest_youtube(query: str = "make money online") -> list[BaseSignal]:
             timestamp=base_ts.isoformat(),
             url=f"https://www.youtube.com/watch?v={vid_id}",
             external_id=f"yt_{vid_id}",
-        ))
+        )
+        if not validate_signal(sig):
+            continue
+        signals.append(sig)
     return signals

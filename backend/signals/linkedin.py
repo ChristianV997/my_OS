@@ -2,7 +2,7 @@
 from __future__ import annotations
 import hashlib
 from datetime import datetime, timezone
-from .base import BaseSignal
+from .base import BaseSignal, validate_signal
 
 _TEXTS = [
     "We scaled growth from $0 to $1M ARR using automation — full playbook",
@@ -53,7 +53,7 @@ def ingest_linkedin(query: str = "linkedin trending business") -> list[BaseSigna
         raw_eng    = min(1.0, eng_rate) * 0.7 + norm_reach * 0.3
         engagement = min(1.0, round(raw_eng, 4))
         post_id    = f"{h % 10**18:018d}"
-        signals.append(BaseSignal(
+        sig = BaseSignal(
             source="linkedin",
             raw_text=text,
             engagement=engagement,
@@ -61,5 +61,8 @@ def ingest_linkedin(query: str = "linkedin trending business") -> list[BaseSigna
             timestamp=base_ts.isoformat(),
             url=f"https://www.linkedin.com/feed/update/urn:li:activity:{post_id}/",
             external_id=f"li_{post_id}",
-        ))
+        )
+        if not validate_signal(sig):
+            continue
+        signals.append(sig)
     return signals

@@ -2,7 +2,7 @@
 from __future__ import annotations
 import hashlib
 from datetime import datetime, timezone
-from .base import BaseSignal
+from .base import BaseSignal, validate_signal
 
 _TEXTS = [
     "best AI productivity tools to scale your business 2025",
@@ -50,7 +50,7 @@ def ingest_google_trends(query: str = "google trends rising") -> list[BaseSignal
         norm_rising   = min(1.0, rising_pct / 500.0)
         raw_eng       = norm_volume * 0.6 + norm_rising * 0.4
         engagement    = min(1.0, round(raw_eng, 4))
-        signals.append(BaseSignal(
+        sig = BaseSignal(
             source="google_trends",
             raw_text=text,
             engagement=engagement,
@@ -58,5 +58,8 @@ def ingest_google_trends(query: str = "google trends rising") -> list[BaseSignal
             timestamp=base_ts.isoformat(),
             url=f"https://trends.google.com/trends/explore?q={text.replace(' ', '%20')}",
             external_id=f"gt_{h % 10**12:012d}",
-        ))
+        )
+        if not validate_signal(sig):
+            continue
+        signals.append(sig)
     return signals

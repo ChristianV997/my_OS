@@ -2,7 +2,7 @@
 from __future__ import annotations
 import hashlib
 from datetime import datetime, timezone
-from .base import BaseSignal
+from .base import BaseSignal, validate_signal
 
 _TEXTS = [
     "This $12 product changed my morning routine forever",
@@ -42,8 +42,7 @@ _CATEGORIES = [
 
 
 def _det_hash(query: str, i: int) -> int:
-    h = int(hashlib.md5(f"{query}:{i}".encode()).hexdigest(), 16)
-    return h
+    return int(hashlib.md5(f"{query}:{i}".encode()).hexdigest(), 16)
 
 
 def ingest_tiktok(query: str = "trending products") -> list[BaseSignal]:
@@ -56,7 +55,7 @@ def ingest_tiktok(query: str = "trending products") -> list[BaseSignal]:
         comments  = ((_det_hash(query, i + 200)) % 5_000) + 500
         raw_eng   = (likes * 1.5 + comments * 3) / max(views, 1)
         engagement = min(1.0, round(raw_eng, 4))
-        signals.append(BaseSignal(
+        sig = BaseSignal(
             source="tiktok",
             raw_text=text,
             engagement=engagement,
@@ -64,5 +63,8 @@ def ingest_tiktok(query: str = "trending products") -> list[BaseSignal]:
             timestamp=base_ts.isoformat(),
             url=f"https://www.tiktok.com/@creator{(h % 9999):04d}/video/{h % 10**12:012d}",
             external_id=f"tt_{h % 10**15:015d}",
-        ))
+        )
+        if not validate_signal(sig):
+            continue
+        signals.append(sig)
     return signals
