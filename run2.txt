@@ -1,0 +1,6 @@
+[ingest]  34 signals from 7 sources
+[filter]  22 signals passed (13 keywords, engagement >= 0.6)
+[hooks]   22 hooks generated
+[ads]     22 ads formatted
+[output]  output_ads.json written (30,235 bytes)
+[output]  output_ads.csv written (22 rows)
