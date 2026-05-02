@@ -34,6 +34,6 @@ def validate_signal(s: BaseSignal) -> bool:
         return False
     if not isinstance(s.get("external_id"), str) or not s["external_id"].strip():
         return False
-    if eng < 0.60:
+    if eng < 0.50:
         return False
     return True
