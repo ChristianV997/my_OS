@@ -50,7 +50,7 @@ def format_ads(hooks: list[dict]) -> list[dict]:
             "external_id":    h["external_id"],
             "engagement":     engagement,
             "rank_score":     rank_score,
-            "hook_variant":   1,
+            "hook_variant":   h.get("hook_variant", 1),
             "ready_for_ads":  engagement >= _READY_THRESHOLD and bool(headline),
         })
     return ads

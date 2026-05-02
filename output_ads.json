@@ -3,8 +3,8 @@
     "total_signals": 22,
     "filtered_signals": 15,
     "deduped_signals": 15,
-    "hooks": 15,
-    "ads": 15,
+    "hooks": 45,
+    "ads": 45,
     "sources": [
       "amazon",
       "google",
@@ -369,7 +369,7 @@
   ],
   "ads": [
     {
-      "headline": "You won't believe this: Why smart buyers always choose this over the alternative",
+      "headline": "You won't believe this: Stop what you're doing — Why smart buyers always choose ",
       "primary_text": "Trending now: Why smart buyers always choose this over the alternative. Join thousands discovering this.",
       "call_to_action": "See Reviews",
       "category": "review",
@@ -382,7 +382,33 @@
       "ready_for_ads": true
     },
     {
-      "headline": "Stop what you're doing — Growth hack: this posture corrector scales your work ho",
+      "headline": "Stop what you're doing — Why smart buyers always choose this over the alternativ",
+      "primary_text": "Trending now: Why smart buyers always choose this over the alternative. Join thousands discovering this.",
+      "call_to_action": "See Reviews",
+      "category": "review",
+      "source": "meta",
+      "source_url": "https://www.facebook.com/permalink.php?story_fbid=224781932395673",
+      "external_id": "fb_224781932395673",
+      "engagement": 1.0,
+      "rank_score": 0.9956,
+      "hook_variant": 2,
+      "ready_for_ads": true
+    },
+    {
+      "headline": "Everyone is talking about: Stop what you're doing — Why smart buyers always choo",
+      "primary_text": "Trending now: Why smart buyers always choose this over the alternative. Join thousands discovering this.",
+      "call_to_action": "See Reviews",
+      "category": "review",
+      "source": "meta",
+      "source_url": "https://www.facebook.com/permalink.php?story_fbid=224781932395673",
+      "external_id": "fb_224781932395673",
+      "engagement": 1.0,
+      "rank_score": 0.9911,
+      "hook_variant": 3,
+      "ready_for_ads": true
+    },
+    {
+      "headline": "You won't believe this: The secret nobody tells you: Growth hack: this posture c",
       "primary_text": "Top-rated and bestselling. Growth hack: this posture corrector scales your work hours pain-free. Limited stock available.",
       "call_to_action": "Discover More",
       "category": "lifestyle",
@@ -395,7 +421,33 @@
       "ready_for_ads": true
     },
     {
-      "headline": "The secret nobody tells you: Productivity essential: foam roller worth buying — ",
+      "headline": "The secret nobody tells you: Growth hack: this posture corrector scales your wor",
+      "primary_text": "Top-rated and bestselling. Growth hack: this posture corrector scales your work hours pain-free. Limited stock available.",
+      "call_to_action": "Discover More",
+      "category": "lifestyle",
+      "source": "amazon",
+      "source_url": "https://www.amazon.com/dp/B082155501",
+      "external_id": "amz_B082155501",
+      "engagement": 0.78,
+      "rank_score": 0.8062,
+      "hook_variant": 2,
+      "ready_for_ads": true
+    },
+    {
+      "headline": "Everyone is talking about: The secret nobody tells you: Growth hack: this postur",
+      "primary_text": "Top-rated and bestselling. Growth hack: this posture corrector scales your work hours pain-free. Limited stock available.",
+      "call_to_action": "Discover More",
+      "category": "lifestyle",
+      "source": "amazon",
+      "source_url": "https://www.amazon.com/dp/B082155501",
+      "external_id": "amz_B082155501",
+      "engagement": 0.78,
+      "rank_score": 0.8018,
+      "hook_variant": 3,
+      "ready_for_ads": true
+    },
+    {
+      "headline": "You won't believe this: Here's why this matters: Productivity essential: foam ro",
       "primary_text": "Top-rated and bestselling. Productivity essential: foam roller worth buying — PTs earn from referrals. Limited stock available.",
       "call_to_action": "Discover More",
       "category": "lifestyle",
@@ -408,7 +460,33 @@
       "ready_for_ads": true
     },
     {
-      "headline": "Everyone is switching because: This $29 tool makes videos look professional — pr",
+      "headline": "Here's why this matters: Productivity essential: foam roller worth buying — PTs ",
+      "primary_text": "Top-rated and bestselling. Productivity essential: foam roller worth buying — PTs earn from referrals. Limited stock available.",
+      "call_to_action": "Discover More",
+      "category": "lifestyle",
+      "source": "amazon",
+      "source_url": "https://www.amazon.com/dp/B819606039",
+      "external_id": "amz_B819606039",
+      "engagement": 0.7379,
+      "rank_score": 0.7592,
+      "hook_variant": 2,
+      "ready_for_ads": true
+    },
+    {
+      "headline": "Everyone is talking about: Here's why this matters: Productivity essential: foam",
+      "primary_text": "Top-rated and bestselling. Productivity essential: foam roller worth buying — PTs earn from referrals. Limited stock available.",
+      "call_to_action": "Discover More",
+      "category": "lifestyle",
+      "source": "amazon",
+      "source_url": "https://www.amazon.com/dp/B819606039",
+      "external_id": "amz_B819606039",
+      "engagement": 0.7379,
+      "rank_score": 0.7548,
+      "hook_variant": 3,
+      "ready_for_ads": true
+    },
+    {
+      "headline": "You won't believe this: Everyone is switching because: This $29 tool makes video",
       "primary_text": "Top-rated and bestselling. This $29 tool makes videos look professional — price-to-value unmatched. Limited stock available.",
       "call_to_action": "Try It Free",
       "category": "productivity",
@@ -421,7 +499,33 @@
       "ready_for_ads": true
     },
     {
-      "headline": "Here's why this matters: Why the rich buy assets not liabilities — explained",
+      "headline": "Everyone is switching because: This $29 tool makes videos look professional — pr",
+      "primary_text": "Top-rated and bestselling. This $29 tool makes videos look professional — price-to-value unmatched. Limited stock available.",
+      "call_to_action": "Try It Free",
+      "category": "productivity",
+      "source": "amazon",
+      "source_url": "https://www.amazon.com/dp/B006205309",
+      "external_id": "amz_B006205309",
+      "engagement": 0.7343,
+      "rank_score": 0.743,
+      "hook_variant": 2,
+      "ready_for_ads": true
+    },
+    {
+      "headline": "Everyone is talking about: Everyone is switching because: This $29 tool makes vi",
+      "primary_text": "Top-rated and bestselling. This $29 tool makes videos look professional — price-to-value unmatched. Limited stock available.",
+      "call_to_action": "Try It Free",
+      "category": "productivity",
+      "source": "amazon",
+      "source_url": "https://www.amazon.com/dp/B006205309",
+      "external_id": "amz_B006205309",
+      "engagement": 0.7343,
+      "rank_score": 0.7386,
+      "hook_variant": 3,
+      "ready_for_ads": true
+    },
+    {
+      "headline": "You won't believe this: This changes everything: Why the rich buy assets not lia",
       "primary_text": "Trending now: Why the rich buy assets not liabilities — explained. Join thousands discovering this.",
       "call_to_action": "Start Saving Today",
       "category": "finance",
@@ -434,7 +538,33 @@
       "ready_for_ads": true
     },
     {
-      "headline": "You won't believe this: Scale your desk setup — the cable management tool everyo",
+      "headline": "This changes everything: Why the rich buy assets not liabilities — explained — h",
+      "primary_text": "Trending now: Why the rich buy assets not liabilities — explained. Join thousands discovering this.",
+      "call_to_action": "Start Saving Today",
+      "category": "finance",
+      "source": "youtube",
+      "source_url": "https://www.youtube.com/watch?v=20605875719",
+      "external_id": "yt_20605875719",
+      "engagement": 0.733,
+      "rank_score": 0.7286,
+      "hook_variant": 2,
+      "ready_for_ads": true
+    },
+    {
+      "headline": "Everyone is talking about: This changes everything: Why the rich buy assets not ",
+      "primary_text": "Trending now: Why the rich buy assets not liabilities — explained. Join thousands discovering this.",
+      "call_to_action": "Start Saving Today",
+      "category": "finance",
+      "source": "youtube",
+      "source_url": "https://www.youtube.com/watch?v=20605875719",
+      "external_id": "yt_20605875719",
+      "engagement": 0.733,
+      "rank_score": 0.7242,
+      "hook_variant": 3,
+      "ready_for_ads": true
+    },
+    {
+      "headline": "You won't believe this: Stop what you're doing — Scale your desk setup — the cab",
       "primary_text": "Top-rated and bestselling. Scale your desk setup — the cable management tool everyone needs to buy. Limited stock available.",
       "call_to_action": "Try It Free",
       "category": "productivity",
@@ -447,7 +577,33 @@
       "ready_for_ads": true
     },
     {
-      "headline": "Stop what you're doing — how to make money with automation and ChatGPT",
+      "headline": "Stop what you're doing — Scale your desk setup — the cable management tool every",
+      "primary_text": "Top-rated and bestselling. Scale your desk setup — the cable management tool everyone needs to buy. Limited stock available.",
+      "call_to_action": "Try It Free",
+      "category": "productivity",
+      "source": "amazon",
+      "source_url": "https://www.amazon.com/dp/B446986140",
+      "external_id": "amz_B446986140",
+      "engagement": 0.7223,
+      "rank_score": 0.7067,
+      "hook_variant": 2,
+      "ready_for_ads": true
+    },
+    {
+      "headline": "Everyone is talking about: Stop what you're doing — Scale your desk setup — the ",
+      "primary_text": "Top-rated and bestselling. Scale your desk setup — the cable management tool everyone needs to buy. Limited stock available.",
+      "call_to_action": "Try It Free",
+      "category": "productivity",
+      "source": "amazon",
+      "source_url": "https://www.amazon.com/dp/B446986140",
+      "external_id": "amz_B446986140",
+      "engagement": 0.7223,
+      "rank_score": 0.7023,
+      "hook_variant": 3,
+      "ready_for_ads": true
+    },
+    {
+      "headline": "You won't believe this: The secret nobody tells you: how to make money with auto",
       "primary_text": "People are searching for this right now. how to make money with automation and ChatGPT.",
       "call_to_action": "Start Saving Today",
       "category": "finance",
@@ -460,7 +616,33 @@
       "ready_for_ads": true
     },
     {
-      "headline": "The secret nobody tells you: My secret to getting 10x results in half the time",
+      "headline": "The secret nobody tells you: how to make money with automation and ChatGPT — her",
+      "primary_text": "People are searching for this right now. how to make money with automation and ChatGPT.",
+      "call_to_action": "Start Saving Today",
+      "category": "finance",
+      "source": "google_trends",
+      "source_url": "https://trends.google.com/trends/explore?q=how%20to%20make%20money%20with%20automation%20and%20ChatGPT",
+      "external_id": "gt_289634869838",
+      "engagement": 0.6577,
+      "rank_score": 0.6417,
+      "hook_variant": 2,
+      "ready_for_ads": true
+    },
+    {
+      "headline": "Everyone is talking about: The secret nobody tells you: how to make money with a",
+      "primary_text": "People are searching for this right now. how to make money with automation and ChatGPT.",
+      "call_to_action": "Start Saving Today",
+      "category": "finance",
+      "source": "google_trends",
+      "source_url": "https://trends.google.com/trends/explore?q=how%20to%20make%20money%20with%20automation%20and%20ChatGPT",
+      "external_id": "gt_289634869838",
+      "engagement": 0.6577,
+      "rank_score": 0.6373,
+      "hook_variant": 3,
+      "ready_for_ads": true
+    },
+    {
+      "headline": "You won't believe this: Here's why this matters: My secret to getting 10x result",
       "primary_text": "Trending now: My secret to getting 10x results in half the time. Join thousands discovering this.",
       "call_to_action": "Try It Free",
       "category": "productivity",
@@ -473,7 +655,33 @@
       "ready_for_ads": true
     },
     {
-      "headline": "Everyone is switching because: The only sales tool worth buying in 2025 — copy t",
+      "headline": "Here's why this matters: My secret to getting 10x results in half the time — her",
+      "primary_text": "Trending now: My secret to getting 10x results in half the time. Join thousands discovering this.",
+      "call_to_action": "Try It Free",
+      "category": "productivity",
+      "source": "tiktok",
+      "source_url": "https://www.tiktok.com/@creator0498/video/739609042114",
+      "external_id": "tt_215739609042114",
+      "engagement": 0.5768,
+      "rank_score": 0.5637,
+      "hook_variant": 2,
+      "ready_for_ads": true
+    },
+    {
+      "headline": "Everyone is talking about: Here's why this matters: My secret to getting 10x res",
+      "primary_text": "Trending now: My secret to getting 10x results in half the time. Join thousands discovering this.",
+      "call_to_action": "Try It Free",
+      "category": "productivity",
+      "source": "tiktok",
+      "source_url": "https://www.tiktok.com/@creator0498/video/739609042114",
+      "external_id": "tt_215739609042114",
+      "engagement": 0.5768,
+      "rank_score": 0.5592,
+      "hook_variant": 3,
+      "ready_for_ads": true
+    },
+    {
+      "headline": "You won't believe this: Everyone is switching because: The only sales tool worth",
       "primary_text": "Professionals are talking about this. The only sales tool worth buying in 2025 — copy this script to earn.",
       "call_to_action": "Grow Your Business",
       "category": "marketing",
@@ -486,7 +694,33 @@
       "ready_for_ads": true
     },
     {
-      "headline": "Here's why this matters: best productivity app 2025 review",
+      "headline": "Everyone is switching because: The only sales tool worth buying in 2025 — copy t",
+      "primary_text": "Professionals are talking about this. The only sales tool worth buying in 2025 — copy this script to earn.",
+      "call_to_action": "Grow Your Business",
+      "category": "marketing",
+      "source": "linkedin",
+      "source_url": "https://www.linkedin.com/feed/update/urn:li:activity:724812144146010097/",
+      "external_id": "li_724812144146010097",
+      "engagement": 0.564,
+      "rank_score": 0.5401,
+      "hook_variant": 2,
+      "ready_for_ads": true
+    },
+    {
+      "headline": "Everyone is talking about: Everyone is switching because: The only sales tool wo",
+      "primary_text": "Professionals are talking about this. The only sales tool worth buying in 2025 — copy this script to earn.",
+      "call_to_action": "Grow Your Business",
+      "category": "marketing",
+      "source": "linkedin",
+      "source_url": "https://www.linkedin.com/feed/update/urn:li:activity:724812144146010097/",
+      "external_id": "li_724812144146010097",
+      "engagement": 0.564,
+      "rank_score": 0.5356,
+      "hook_variant": 3,
+      "ready_for_ads": true
+    },
+    {
+      "headline": "You won't believe this: This changes everything: best productivity app 2025 revi",
       "primary_text": "People are searching for this right now. best productivity app 2025 review.",
       "call_to_action": "Try It Free",
       "category": "productivity",
@@ -499,7 +733,33 @@
       "ready_for_ads": true
     },
     {
-      "headline": "You won't believe this: how to scale a dropshipping business in 2025",
+      "headline": "This changes everything: best productivity app 2025 review — here's how.",
+      "primary_text": "People are searching for this right now. best productivity app 2025 review.",
+      "call_to_action": "Try It Free",
+      "category": "productivity",
+      "source": "google",
+      "source_url": "https://www.google.com/search?q=best+productivity+app+2025+review",
+      "external_id": "goog_228509279377",
+      "engagement": 0.5563,
+      "rank_score": 0.5206,
+      "hook_variant": 2,
+      "ready_for_ads": true
+    },
+    {
+      "headline": "Everyone is talking about: This changes everything: best productivity app 2025 r",
+      "primary_text": "People are searching for this right now. best productivity app 2025 review.",
+      "call_to_action": "Try It Free",
+      "category": "productivity",
+      "source": "google",
+      "source_url": "https://www.google.com/search?q=best+productivity+app+2025+review",
+      "external_id": "goog_228509279377",
+      "engagement": 0.5563,
+      "rank_score": 0.5162,
+      "hook_variant": 3,
+      "ready_for_ads": true
+    },
+    {
+      "headline": "You won't believe this: Stop what you're doing — how to scale a dropshipping bus",
       "primary_text": "People are searching for this right now. how to scale a dropshipping business in 2025.",
       "call_to_action": "Shop Now",
       "category": "ecommerce",
@@ -512,7 +772,33 @@
       "ready_for_ads": true
     },
     {
-      "headline": "Stop what you're doing — Our retention tool earned 95% growth — the secret produ",
+      "headline": "Stop what you're doing — how to scale a dropshipping business in 2025 — here's h",
+      "primary_text": "People are searching for this right now. how to scale a dropshipping business in 2025.",
+      "call_to_action": "Shop Now",
+      "category": "ecommerce",
+      "source": "google_trends",
+      "source_url": "https://trends.google.com/trends/explore?q=how%20to%20scale%20a%20dropshipping%20business%20in%202025",
+      "external_id": "gt_860767772404",
+      "engagement": 0.5532,
+      "rank_score": 0.5048,
+      "hook_variant": 2,
+      "ready_for_ads": true
+    },
+    {
+      "headline": "Everyone is talking about: Stop what you're doing — how to scale a dropshipping ",
+      "primary_text": "People are searching for this right now. how to scale a dropshipping business in 2025.",
+      "call_to_action": "Shop Now",
+      "category": "ecommerce",
+      "source": "google_trends",
+      "source_url": "https://trends.google.com/trends/explore?q=how%20to%20scale%20a%20dropshipping%20business%20in%202025",
+      "external_id": "gt_860767772404",
+      "engagement": 0.5532,
+      "rank_score": 0.5003,
+      "hook_variant": 3,
+      "ready_for_ads": true
+    },
+    {
+      "headline": "You won't believe this: The secret nobody tells you: Our retention tool earned 9",
       "primary_text": "Professionals are talking about this. Our retention tool earned 95% growth — the secret product change.",
       "call_to_action": "Scale Now",
       "category": "business",
@@ -525,7 +811,33 @@
       "ready_for_ads": true
     },
     {
-      "headline": "The secret nobody tells you: how to earn from real estate with no money hack",
+      "headline": "The secret nobody tells you: Our retention tool earned 95% growth — the secret p",
+      "primary_text": "Professionals are talking about this. Our retention tool earned 95% growth — the secret product change.",
+      "call_to_action": "Scale Now",
+      "category": "business",
+      "source": "linkedin",
+      "source_url": "https://www.linkedin.com/feed/update/urn:li:activity:031965560092595705/",
+      "external_id": "li_031965560092595705",
+      "engagement": 0.5434,
+      "rank_score": 0.4836,
+      "hook_variant": 2,
+      "ready_for_ads": true
+    },
+    {
+      "headline": "Everyone is talking about: The secret nobody tells you: Our retention tool earne",
+      "primary_text": "Professionals are talking about this. Our retention tool earned 95% growth — the secret product change.",
+      "call_to_action": "Scale Now",
+      "category": "business",
+      "source": "linkedin",
+      "source_url": "https://www.linkedin.com/feed/update/urn:li:activity:031965560092595705/",
+      "external_id": "li_031965560092595705",
+      "engagement": 0.5434,
+      "rank_score": 0.4792,
+      "hook_variant": 3,
+      "ready_for_ads": true
+    },
+    {
+      "headline": "You won't believe this: Here's why this matters: how to earn from real estate wi",
       "primary_text": "People are searching for this right now. how to earn from real estate with no money hack.",
       "call_to_action": "Start Saving Today",
       "category": "finance",
@@ -538,7 +850,33 @@
       "ready_for_ads": true
     },
     {
-      "headline": "Everyone is switching because: best productivity system and automation tools for",
+      "headline": "Here's why this matters: how to earn from real estate with no money hack — here'",
+      "primary_text": "People are searching for this right now. how to earn from real estate with no money hack.",
+      "call_to_action": "Start Saving Today",
+      "category": "finance",
+      "source": "google_trends",
+      "source_url": "https://trends.google.com/trends/explore?q=how%20to%20earn%20from%20real%20estate%20with%20no%20money%20hack",
+      "external_id": "gt_916554555670",
+      "engagement": 0.5285,
+      "rank_score": 0.4584,
+      "hook_variant": 2,
+      "ready_for_ads": true
+    },
+    {
+      "headline": "Everyone is talking about: Here's why this matters: how to earn from real estate",
+      "primary_text": "People are searching for this right now. how to earn from real estate with no money hack.",
+      "call_to_action": "Start Saving Today",
+      "category": "finance",
+      "source": "google_trends",
+      "source_url": "https://trends.google.com/trends/explore?q=how%20to%20earn%20from%20real%20estate%20with%20no%20money%20hack",
+      "external_id": "gt_916554555670",
+      "engagement": 0.5285,
+      "rank_score": 0.4539,
+      "hook_variant": 3,
+      "ready_for_ads": true
+    },
+    {
+      "headline": "You won't believe this: Everyone is switching because: best productivity system ",
       "primary_text": "People are searching for this right now. best productivity system and automation tools for entrepreneurs.",
       "call_to_action": "Try It Free",
       "category": "productivity",
@@ -551,7 +889,33 @@
       "ready_for_ads": true
     },
     {
-      "headline": "Here's why this matters: The hiring tool every founder needs — worth the price t",
+      "headline": "Everyone is switching because: best productivity system and automation tools for",
+      "primary_text": "People are searching for this right now. best productivity system and automation tools for entrepreneurs.",
+      "call_to_action": "Try It Free",
+      "category": "productivity",
+      "source": "google_trends",
+      "source_url": "https://trends.google.com/trends/explore?q=best%20productivity%20system%20and%20automation%20tools%20for%20entrepreneurs",
+      "external_id": "gt_559979085434",
+      "engagement": 0.5053,
+      "rank_score": 0.4265,
+      "hook_variant": 2,
+      "ready_for_ads": true
+    },
+    {
+      "headline": "Everyone is talking about: Everyone is switching because: best productivity syst",
+      "primary_text": "People are searching for this right now. best productivity system and automation tools for entrepreneurs.",
+      "call_to_action": "Try It Free",
+      "category": "productivity",
+      "source": "google_trends",
+      "source_url": "https://trends.google.com/trends/explore?q=best%20productivity%20system%20and%20automation%20tools%20for%20entrepreneurs",
+      "external_id": "gt_559979085434",
+      "engagement": 0.5053,
+      "rank_score": 0.422,
+      "hook_variant": 3,
+      "ready_for_ads": true
+    },
+    {
+      "headline": "You won't believe this: This changes everything: The hiring tool every founder n",
       "primary_text": "Professionals are talking about this. The hiring tool every founder needs — worth the price to scale faster.",
       "call_to_action": "Scale Now",
       "category": "business",
@@ -561,6 +925,32 @@
       "engagement": 0.5022,
       "rank_score": 0.4151,
       "hook_variant": 1,
+      "ready_for_ads": true
+    },
+    {
+      "headline": "This changes everything: The hiring tool every founder needs — worth the price t",
+      "primary_text": "Professionals are talking about this. The hiring tool every founder needs — worth the price to scale faster.",
+      "call_to_action": "Scale Now",
+      "category": "business",
+      "source": "linkedin",
+      "source_url": "https://www.linkedin.com/feed/update/urn:li:activity:234508261213359121/",
+      "external_id": "li_234508261213359121",
+      "engagement": 0.5022,
+      "rank_score": 0.4106,
+      "hook_variant": 2,
+      "ready_for_ads": true
+    },
+    {
+      "headline": "Everyone is talking about: This changes everything: The hiring tool every founde",
+      "primary_text": "Professionals are talking about this. The hiring tool every founder needs — worth the price to scale faster.",
+      "call_to_action": "Scale Now",
+      "category": "business",
+      "source": "linkedin",
+      "source_url": "https://www.linkedin.com/feed/update/urn:li:activity:234508261213359121/",
+      "external_id": "li_234508261213359121",
+      "engagement": 0.5022,
+      "rank_score": 0.4062,
+      "hook_variant": 3,
       "ready_for_ads": true
     }
   ]
