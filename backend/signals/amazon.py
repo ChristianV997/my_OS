@@ -50,7 +50,8 @@ def ingest_amazon(query: str = "amazon best sellers") -> list[BaseSignal]:
         raw_eng      = (min(reviews, 50_000) / 50_000.0) * 0.5 \
                      + (rating_tenth / 50.0) * 0.4 \
                      + trend_boost * 0.1
-        engagement   = min(1.0, round(raw_eng, 4))
+        noise_factor = 0.50 + (_det_hash(query, i + 500) % 51) / 100.0
+        engagement   = min(1.0, round(raw_eng * noise_factor, 4))
         asin = f"B{h % 10**9:09d}"
         sig = BaseSignal(
             source="amazon",

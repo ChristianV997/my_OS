@@ -50,14 +50,13 @@ def ingest_google(query: str = "google search trends") -> list[BaseSignal]:
     base_ts = datetime(2025, 5, 1, 12, 0, 0, tzinfo=timezone.utc)
     for i, text in enumerate(_TEXTS):
         h = _det_hash(query, i)
-        cpc_cents = ((_det_hash(query, i + 100)) % 800) + 50
-        ctr_pct   = ((_det_hash(query, i + 200)) % 15) + 1
-        # Normalize to [0, 1] using full realistic ranges, then combine.
-        # High-CPC + high-CTR keywords represent the strongest buy-intent signals.
-        ctr_norm  = (ctr_pct - 1) / 14.0          # 0.0 – 1.0
-        cpc_norm  = min(cpc_cents, 800) / 800.0    # 0.0625 – 1.0
-        raw_eng   = ctr_norm * 0.65 + cpc_norm * 0.35
-        engagement = min(1.0, round(raw_eng, 4))
+        cpc_cents    = ((_det_hash(query, i + 100)) % 800) + 50
+        ctr_pct      = ((_det_hash(query, i + 200)) % 15) + 1
+        ctr_norm     = (ctr_pct - 1) / 14.0
+        cpc_norm     = min(cpc_cents, 800) / 800.0
+        raw_eng      = ctr_norm * 0.65 + cpc_norm * 0.35
+        noise_factor = 0.50 + (_det_hash(query, i + 500) % 51) / 100.0
+        engagement   = min(1.0, round(raw_eng * noise_factor, 4))
         sig = BaseSignal(
             source="google",
             raw_text=text,

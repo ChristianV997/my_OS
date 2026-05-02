@@ -50,12 +50,13 @@ def ingest_meta(query: str = "facebook trending") -> list[BaseSignal]:
     base_ts = datetime(2025, 5, 1, 11, 0, 0, tzinfo=timezone.utc)
     for i, text in enumerate(_TEXTS):
         h = _det_hash(query, i)
-        reactions = (h % 50_000) + 500
-        shares    = ((_det_hash(query, i + 100)) % 10_000) + 100
-        comments  = ((_det_hash(query, i + 200)) % 8_000) + 50
-        reach     = ((_det_hash(query, i + 300)) % 500_000) + 10_000
-        raw_eng   = (reactions * 1.0 + shares * 3.0 + comments * 2.0) / max(reach, 1)
-        engagement = min(1.0, round(raw_eng, 4))
+        reactions    = (h % 50_000) + 500
+        shares       = ((_det_hash(query, i + 100)) % 10_000) + 100
+        comments     = ((_det_hash(query, i + 200)) % 8_000) + 50
+        reach        = ((_det_hash(query, i + 300)) % 500_000) + 10_000
+        raw_eng      = (reactions * 1.0 + shares * 3.0 + comments * 2.0) / max(reach, 1)
+        noise_factor = 0.50 + (_det_hash(query, i + 500) % 51) / 100.0
+        engagement   = min(1.0, round(raw_eng * noise_factor, 4))
         post_id = f"{h % 10**15:015d}"
         sig = BaseSignal(
             source="meta",

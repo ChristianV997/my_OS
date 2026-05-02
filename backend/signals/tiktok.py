@@ -50,11 +50,12 @@ def ingest_tiktok(query: str = "trending products") -> list[BaseSignal]:
     base_ts = datetime(2025, 5, 1, 9, 0, 0, tzinfo=timezone.utc)
     for i, text in enumerate(_TEXTS):
         h = _det_hash(query, i)
-        views     = (h % 900_000) + 100_000
-        likes     = ((_det_hash(query, i + 100)) % 90_000) + 10_000
-        comments  = ((_det_hash(query, i + 200)) % 5_000) + 500
-        raw_eng   = (likes * 1.5 + comments * 3) / max(views, 1)
-        engagement = min(1.0, round(raw_eng, 4))
+        views        = (h % 900_000) + 100_000
+        likes        = ((_det_hash(query, i + 100)) % 90_000) + 10_000
+        comments     = ((_det_hash(query, i + 200)) % 5_000) + 500
+        raw_eng      = (likes * 1.5 + comments * 3) / max(views, 1)
+        noise_factor = 0.50 + (_det_hash(query, i + 500) % 51) / 100.0
+        engagement   = min(1.0, round(raw_eng * noise_factor, 4))
         sig = BaseSignal(
             source="tiktok",
             raw_text=text,
