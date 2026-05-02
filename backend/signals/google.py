@@ -2,7 +2,7 @@
 from __future__ import annotations
 import hashlib
 from datetime import datetime, timezone
-from .base import BaseSignal
+from .base import BaseSignal, validate_signal
 
 _TEXTS = [
     "best productivity app 2025 review",
@@ -50,12 +50,14 @@ def ingest_google(query: str = "google search trends") -> list[BaseSignal]:
     base_ts = datetime(2025, 5, 1, 12, 0, 0, tzinfo=timezone.utc)
     for i, text in enumerate(_TEXTS):
         h = _det_hash(query, i)
-        search_volume = (h % 500_000) + 10_000
-        cpc_cents     = ((_det_hash(query, i + 100)) % 800) + 50
-        ctr_pct       = ((_det_hash(query, i + 200)) % 15) + 1
-        raw_eng       = (ctr_pct / 100.0) * 0.7 + (min(cpc_cents, 500) / 500.0) * 0.3
-        engagement    = min(1.0, round(raw_eng, 4))
-        signals.append(BaseSignal(
+        cpc_cents    = ((_det_hash(query, i + 100)) % 800) + 50
+        ctr_pct      = ((_det_hash(query, i + 200)) % 15) + 1
+        ctr_norm     = (ctr_pct - 1) / 14.0
+        cpc_norm     = min(cpc_cents, 800) / 800.0
+        raw_eng      = ctr_norm * 0.65 + cpc_norm * 0.35
+        noise_factor = 0.50 + (_det_hash(query, i + 500) % 51) / 100.0
+        engagement   = min(1.0, round(raw_eng * noise_factor, 4))
+        sig = BaseSignal(
             source="google",
             raw_text=text,
             engagement=engagement,
@@ -63,5 +65,8 @@ def ingest_google(query: str = "google search trends") -> list[BaseSignal]:
             timestamp=base_ts.isoformat(),
             url=f"https://www.google.com/search?q={text.replace(' ', '+')}",
             external_id=f"goog_{h % 10**12:012d}",
-        ))
+        )
+        if not validate_signal(sig):
+            continue
+        signals.append(sig)
     return signals

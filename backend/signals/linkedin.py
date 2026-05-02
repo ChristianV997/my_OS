@@ -2,7 +2,7 @@
 from __future__ import annotations
 import hashlib
 from datetime import datetime, timezone
-from .base import BaseSignal
+from .base import BaseSignal, validate_signal
 
 _TEXTS = [
     "We scaled growth from $0 to $1M ARR using automation — full playbook",
@@ -44,16 +44,17 @@ def ingest_linkedin(query: str = "linkedin trending business") -> list[BaseSigna
     base_ts = datetime(2025, 5, 1, 13, 0, 0, tzinfo=timezone.utc)
     for i, text in enumerate(_TEXTS):
         h = _det_hash(query, i)
-        reactions  = (h % 12_000) + 200
-        comments   = ((_det_hash(query, i + 100)) % 800) + 20
-        shares     = ((_det_hash(query, i + 200)) % 600) + 10
-        reach      = ((_det_hash(query, i + 300)) % 80_000) + 5_000
-        eng_rate   = (reactions + comments * 2 + shares * 3) / max(reach, 1)
-        norm_reach = min(1.0, reach / 80_000.0)
-        raw_eng    = min(1.0, eng_rate) * 0.7 + norm_reach * 0.3
-        engagement = min(1.0, round(raw_eng, 4))
-        post_id    = f"{h % 10**18:018d}"
-        signals.append(BaseSignal(
+        reactions    = (h % 12_000) + 200
+        comments     = ((_det_hash(query, i + 100)) % 800) + 20
+        shares       = ((_det_hash(query, i + 200)) % 600) + 10
+        norm_r       = reactions / 12_200.0
+        norm_c       = comments  / 820.0
+        norm_s       = shares    / 610.0
+        raw_eng      = norm_r * 0.50 + norm_c * 0.30 + norm_s * 0.20
+        noise_factor = 0.50 + (_det_hash(query, i + 500) % 51) / 100.0
+        engagement   = min(1.0, round(raw_eng * noise_factor, 4))
+        post_id      = f"{h % 10**18:018d}"
+        sig = BaseSignal(
             source="linkedin",
             raw_text=text,
             engagement=engagement,
@@ -61,5 +62,8 @@ def ingest_linkedin(query: str = "linkedin trending business") -> list[BaseSigna
             timestamp=base_ts.isoformat(),
             url=f"https://www.linkedin.com/feed/update/urn:li:activity:{post_id}/",
             external_id=f"li_{post_id}",
-        ))
+        )
+        if not validate_signal(sig):
+            continue
+        signals.append(sig)
     return signals

@@ -1,4 +1,4 @@
-"""run_pipeline — end-to-end signal pipeline: ingest → rank → filter → hooks → ads."""
+"""run_pipeline — end-to-end signal pipeline: ingest → rank → filter → dedup → hooks → ads."""
 from __future__ import annotations
 import json
 import csv
@@ -7,6 +7,7 @@ import os
 from backend.signals.ingest import ingest_all_sync
 from backend.pipeline.rank import rank_signals
 from backend.pipeline.filter import filter_signals, FILTER_KEYWORDS, ENGAGEMENT_THRESHOLD
+from backend.pipeline.dedup import dedup_signals
 from backend.pipeline.hooks import generate_hooks
 from backend.pipeline.ads import format_ads
 
@@ -29,19 +30,24 @@ def run() -> dict:
     print(f"[filter]  {len(filtered)} signals passed ({len(FILTER_KEYWORDS)} keywords, "
           f"engagement >= {ENGAGEMENT_THRESHOLD})")
 
-    # 4. Hooks
-    hooks = generate_hooks(filtered)
+    # 4. Dedup
+    deduped = dedup_signals(filtered)
+    print(f"[dedup]   {len(deduped)} signals after dedup (removed {len(filtered) - len(deduped)})")
+
+    # 5. Hooks
+    hooks = generate_hooks(deduped)
     print(f"[hooks]   {len(hooks)} hooks generated")
 
-    # 5. Ads
+    # 6. Ads
     ads = format_ads(hooks)
     print(f"[ads]     {len(ads)} ads formatted")
 
-    # 6. Write JSON
+    # 7. Write JSON
     output = {
         "meta": {
             "total_signals": len(all_signals),
             "filtered_signals": len(filtered),
+            "deduped_signals": len(deduped),
             "hooks": len(hooks),
             "ads": len(ads),
             "sources": sorted(VALID_SOURCES),
@@ -55,7 +61,7 @@ def run() -> dict:
         json.dump(output, f, indent=2, ensure_ascii=False)
     print(f"[output]  {OUTPUT_JSON} written ({os.path.getsize(OUTPUT_JSON):,} bytes)")
 
-    # 7. Write CSV
+    # 8. Write CSV
     if ads:
         fieldnames = list(ads[0].keys())
         with open(OUTPUT_CSV, "w", newline="", encoding="utf-8") as f:

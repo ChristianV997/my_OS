@@ -15,6 +15,9 @@ async def _run(fn, *args):
     return await asyncio.get_event_loop().run_in_executor(None, fn, *args)
 
 
+_SOURCE_CAP = 4
+
+
 async def ingest_all() -> list[BaseSignal]:
     results = await asyncio.gather(
         _run(ingest_tiktok,        "trending products"),
@@ -27,7 +30,8 @@ async def ingest_all() -> list[BaseSignal]:
     )
     signals: list[BaseSignal] = []
     for batch in results:
-        signals.extend(batch)
+        capped = sorted(batch, key=lambda s: s["engagement"], reverse=True)[:_SOURCE_CAP]
+        signals.extend(capped)
     return signals
 
 

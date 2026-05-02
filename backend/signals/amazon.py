@@ -2,7 +2,7 @@
 from __future__ import annotations
 import hashlib
 from datetime import datetime, timezone
-from .base import BaseSignal
+from .base import BaseSignal, validate_signal
 
 _TEXTS = [
     "Worth every penny — this tool saved me $200 in one month",
@@ -50,9 +50,10 @@ def ingest_amazon(query: str = "amazon best sellers") -> list[BaseSignal]:
         raw_eng      = (min(reviews, 50_000) / 50_000.0) * 0.5 \
                      + (rating_tenth / 50.0) * 0.4 \
                      + trend_boost * 0.1
-        engagement   = min(1.0, round(raw_eng, 4))
+        noise_factor = 0.50 + (_det_hash(query, i + 500) % 51) / 100.0
+        engagement   = min(1.0, round(raw_eng * noise_factor, 4))
         asin = f"B{h % 10**9:09d}"
-        signals.append(BaseSignal(
+        sig = BaseSignal(
             source="amazon",
             raw_text=text,
             engagement=engagement,
@@ -60,5 +61,8 @@ def ingest_amazon(query: str = "amazon best sellers") -> list[BaseSignal]:
             timestamp=base_ts.isoformat(),
             url=f"https://www.amazon.com/dp/{asin}",
             external_id=f"amz_{asin}",
-        ))
+        )
+        if not validate_signal(sig):
+            continue
+        signals.append(sig)
     return signals

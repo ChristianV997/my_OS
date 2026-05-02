@@ -7,7 +7,7 @@ FILTER_KEYWORDS = [
     "hack", "secret", "tool", "productivity", "automation", "scale", "growth",
 ]
 
-ENGAGEMENT_THRESHOLD = 0.01
+ENGAGEMENT_THRESHOLD = 0.50
 
 
 def filter_signals(signals: list[BaseSignal]) -> list[BaseSignal]:
