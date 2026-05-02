@@ -1,10 +1,10 @@
 {
   "meta": {
-    "total_signals": 30,
-    "filtered_signals": 22,
-    "deduped_signals": 22,
-    "hooks": 22,
-    "ads": 22,
+    "total_signals": 22,
+    "filtered_signals": 15,
+    "deduped_signals": 15,
+    "hooks": 15,
+    "ads": 15,
     "sources": [
       "amazon",
       "google",
@@ -42,12 +42,21 @@
     },
     {
       "source": "youtube",
-      "raw_text": "I tried every side hustle for 30 days — results",
-      "engagement": 0.6286,
+      "raw_text": "This marketing strategy got me 10,000 customers",
+      "engagement": 0.7957,
+      "category": "marketing",
+      "timestamp": "2025-05-01T10:00:00+00:00",
+      "url": "https://www.youtube.com/watch?v=81784683266",
+      "external_id": "yt_81784683266"
+    },
+    {
+      "source": "youtube",
+      "raw_text": "Why the rich buy assets not liabilities — explained",
+      "engagement": 0.733,
       "category": "finance",
       "timestamp": "2025-05-01T10:00:00+00:00",
-      "url": "https://www.youtube.com/watch?v=18917358222",
-      "external_id": "yt_18917358222"
+      "url": "https://www.youtube.com/watch?v=20605875719",
+      "external_id": "yt_20605875719"
     },
     {
       "source": "youtube",
@@ -60,57 +69,21 @@
     },
     {
       "source": "youtube",
-      "raw_text": "This marketing strategy got me 10,000 customers",
-      "engagement": 0.7957,
-      "category": "marketing",
-      "timestamp": "2025-05-01T10:00:00+00:00",
-      "url": "https://www.youtube.com/watch?v=81784683266",
-      "external_id": "yt_81784683266"
-    },
-    {
-      "source": "youtube",
-      "raw_text": "The stock market hack that changed my portfolio",
-      "engagement": 0.5063,
+      "raw_text": "I tried every side hustle for 30 days — results",
+      "engagement": 0.6286,
       "category": "finance",
       "timestamp": "2025-05-01T10:00:00+00:00",
-      "url": "https://www.youtube.com/watch?v=14974466606",
-      "external_id": "yt_14974466606"
-    },
-    {
-      "source": "youtube",
-      "raw_text": "Everything wrong with traditional budgeting (and fix)",
-      "engagement": 0.5354,
-      "category": "finance",
-      "timestamp": "2025-05-01T10:00:00+00:00",
-      "url": "https://www.youtube.com/watch?v=08519364066",
-      "external_id": "yt_08519364066"
-    },
-    {
-      "source": "youtube",
-      "raw_text": "Review: is this $49 course actually worth it?",
-      "engagement": 0.5292,
-      "category": "review",
-      "timestamp": "2025-05-01T10:00:00+00:00",
-      "url": "https://www.youtube.com/watch?v=71472565622",
-      "external_id": "yt_71472565622"
-    },
-    {
-      "source": "youtube",
-      "raw_text": "Why the rich buy assets not liabilities — explained",
-      "engagement": 0.733,
-      "category": "finance",
-      "timestamp": "2025-05-01T10:00:00+00:00",
-      "url": "https://www.youtube.com/watch?v=20605875719",
-      "external_id": "yt_20605875719"
+      "url": "https://www.youtube.com/watch?v=18917358222",
+      "external_id": "yt_18917358222"
     },
     {
       "source": "meta",
-      "raw_text": "I quit my 9-5 after discovering this income stream",
-      "engagement": 0.7151,
-      "category": "finance",
+      "raw_text": "Why smart buyers always choose this over the alternative",
+      "engagement": 1.0,
+      "category": "review",
       "timestamp": "2025-05-01T11:00:00+00:00",
-      "url": "https://www.facebook.com/permalink.php?story_fbid=151340378566456",
-      "external_id": "fb_151340378566456"
+      "url": "https://www.facebook.com/permalink.php?story_fbid=224781932395673",
+      "external_id": "fb_224781932395673"
     },
     {
       "source": "meta",
@@ -123,12 +96,21 @@
     },
     {
       "source": "meta",
-      "raw_text": "Why smart buyers always choose this over the alternative",
-      "engagement": 1.0,
-      "category": "review",
+      "raw_text": "I quit my 9-5 after discovering this income stream",
+      "engagement": 0.7151,
+      "category": "finance",
       "timestamp": "2025-05-01T11:00:00+00:00",
-      "url": "https://www.facebook.com/permalink.php?story_fbid=224781932395673",
-      "external_id": "fb_224781932395673"
+      "url": "https://www.facebook.com/permalink.php?story_fbid=151340378566456",
+      "external_id": "fb_151340378566456"
+    },
+    {
+      "source": "google",
+      "raw_text": "best ecommerce platform to start selling online",
+      "engagement": 0.5896,
+      "category": "ecommerce",
+      "timestamp": "2025-05-01T12:00:00+00:00",
+      "url": "https://www.google.com/search?q=best+ecommerce+platform+to+start+selling+online",
+      "external_id": "goog_095657627414"
     },
     {
       "source": "google",
@@ -149,33 +131,6 @@
       "external_id": "goog_249123290863"
     },
     {
-      "source": "google",
-      "raw_text": "best ecommerce platform to start selling online",
-      "engagement": 0.5896,
-      "category": "ecommerce",
-      "timestamp": "2025-05-01T12:00:00+00:00",
-      "url": "https://www.google.com/search?q=best+ecommerce+platform+to+start+selling+online",
-      "external_id": "goog_095657627414"
-    },
-    {
-      "source": "amazon",
-      "raw_text": "Worth every penny — this tool saved me $200 in one month",
-      "engagement": 0.5063,
-      "category": "lifestyle",
-      "timestamp": "2025-05-01T08:00:00+00:00",
-      "url": "https://www.amazon.com/dp/B864319153",
-      "external_id": "amz_B864319153"
-    },
-    {
-      "source": "amazon",
-      "raw_text": "Amazon's best-seller notebook — worth buying 10 at a time",
-      "engagement": 0.518,
-      "category": "productivity",
-      "timestamp": "2025-05-01T08:00:00+00:00",
-      "url": "https://www.amazon.com/dp/B440943723",
-      "external_id": "amz_B440943723"
-    },
-    {
       "source": "amazon",
       "raw_text": "Growth hack: this posture corrector scales your work hours pain-free",
       "engagement": 0.78,
@@ -186,21 +141,12 @@
     },
     {
       "source": "amazon",
-      "raw_text": "How to save $111 monthly — forget the $600 Vitamix buy this $89 blender",
-      "engagement": 0.6894,
-      "category": "review",
-      "timestamp": "2025-05-01T08:00:00+00:00",
-      "url": "https://www.amazon.com/dp/B177515106",
-      "external_id": "amz_B177515106"
-    },
-    {
-      "source": "amazon",
-      "raw_text": "Save $80/month — reusable produce bags worth every penny",
-      "engagement": 0.641,
+      "raw_text": "Productivity essential: foam roller worth buying — PTs earn from referrals",
+      "engagement": 0.7379,
       "category": "lifestyle",
       "timestamp": "2025-05-01T08:00:00+00:00",
-      "url": "https://www.amazon.com/dp/B971950745",
-      "external_id": "amz_B971950745"
+      "url": "https://www.amazon.com/dp/B819606039",
+      "external_id": "amz_B819606039"
     },
     {
       "source": "amazon",
@@ -219,24 +165,6 @@
       "timestamp": "2025-05-01T08:00:00+00:00",
       "url": "https://www.amazon.com/dp/B446986140",
       "external_id": "amz_B446986140"
-    },
-    {
-      "source": "amazon",
-      "raw_text": "Productivity wins: blue light glasses worth buying at this price point",
-      "engagement": 0.602,
-      "category": "lifestyle",
-      "timestamp": "2025-05-01T08:00:00+00:00",
-      "url": "https://www.amazon.com/dp/B262885909",
-      "external_id": "amz_B262885909"
-    },
-    {
-      "source": "amazon",
-      "raw_text": "Productivity essential: foam roller worth buying — PTs earn from referrals",
-      "engagement": 0.7379,
-      "category": "lifestyle",
-      "timestamp": "2025-05-01T08:00:00+00:00",
-      "url": "https://www.amazon.com/dp/B819606039",
-      "external_id": "amz_B819606039"
     },
     {
       "source": "google_trends",
@@ -276,15 +204,6 @@
     },
     {
       "source": "linkedin",
-      "raw_text": "The hiring tool every founder needs — worth the price to scale faster",
-      "engagement": 0.5022,
-      "category": "business",
-      "timestamp": "2025-05-01T13:00:00+00:00",
-      "url": "https://www.linkedin.com/feed/update/urn:li:activity:234508261213359121/",
-      "external_id": "li_234508261213359121"
-    },
-    {
-      "source": "linkedin",
       "raw_text": "The only sales tool worth buying in 2025 — copy this script to earn",
       "engagement": 0.564,
       "category": "marketing",
@@ -300,6 +219,15 @@
       "timestamp": "2025-05-01T13:00:00+00:00",
       "url": "https://www.linkedin.com/feed/update/urn:li:activity:031965560092595705/",
       "external_id": "li_031965560092595705"
+    },
+    {
+      "source": "linkedin",
+      "raw_text": "The hiring tool every founder needs — worth the price to scale faster",
+      "engagement": 0.5022,
+      "category": "business",
+      "timestamp": "2025-05-01T13:00:00+00:00",
+      "url": "https://www.linkedin.com/feed/update/urn:li:activity:234508261213359121/",
+      "external_id": "li_234508261213359121"
     }
   ],
   "filtered": [
@@ -358,15 +286,6 @@
       "external_id": "amz_B446986140"
     },
     {
-      "source": "amazon",
-      "raw_text": "How to save $111 monthly — forget the $600 Vitamix buy this $89 blender",
-      "engagement": 0.6894,
-      "category": "review",
-      "timestamp": "2025-05-01T08:00:00+00:00",
-      "url": "https://www.amazon.com/dp/B177515106",
-      "external_id": "amz_B177515106"
-    },
-    {
       "source": "google_trends",
       "raw_text": "how to make money with automation and ChatGPT",
       "engagement": 0.6577,
@@ -374,24 +293,6 @@
       "timestamp": "2025-05-01T07:00:00+00:00",
       "url": "https://trends.google.com/trends/explore?q=how%20to%20make%20money%20with%20automation%20and%20ChatGPT",
       "external_id": "gt_289634869838"
-    },
-    {
-      "source": "amazon",
-      "raw_text": "Save $80/month — reusable produce bags worth every penny",
-      "engagement": 0.641,
-      "category": "lifestyle",
-      "timestamp": "2025-05-01T08:00:00+00:00",
-      "url": "https://www.amazon.com/dp/B971950745",
-      "external_id": "amz_B971950745"
-    },
-    {
-      "source": "amazon",
-      "raw_text": "Productivity wins: blue light glasses worth buying at this price point",
-      "engagement": 0.602,
-      "category": "lifestyle",
-      "timestamp": "2025-05-01T08:00:00+00:00",
-      "url": "https://www.amazon.com/dp/B262885909",
-      "external_id": "amz_B262885909"
     },
     {
       "source": "tiktok",
@@ -439,15 +340,6 @@
       "external_id": "li_031965560092595705"
     },
     {
-      "source": "youtube",
-      "raw_text": "Review: is this $49 course actually worth it?",
-      "engagement": 0.5292,
-      "category": "review",
-      "timestamp": "2025-05-01T10:00:00+00:00",
-      "url": "https://www.youtube.com/watch?v=71472565622",
-      "external_id": "yt_71472565622"
-    },
-    {
       "source": "google_trends",
       "raw_text": "how to earn from real estate with no money hack",
       "engagement": 0.5285,
@@ -455,33 +347,6 @@
       "timestamp": "2025-05-01T07:00:00+00:00",
       "url": "https://trends.google.com/trends/explore?q=how%20to%20earn%20from%20real%20estate%20with%20no%20money%20hack",
       "external_id": "gt_916554555670"
-    },
-    {
-      "source": "amazon",
-      "raw_text": "Amazon's best-seller notebook — worth buying 10 at a time",
-      "engagement": 0.518,
-      "category": "productivity",
-      "timestamp": "2025-05-01T08:00:00+00:00",
-      "url": "https://www.amazon.com/dp/B440943723",
-      "external_id": "amz_B440943723"
-    },
-    {
-      "source": "youtube",
-      "raw_text": "The stock market hack that changed my portfolio",
-      "engagement": 0.5063,
-      "category": "finance",
-      "timestamp": "2025-05-01T10:00:00+00:00",
-      "url": "https://www.youtube.com/watch?v=14974466606",
-      "external_id": "yt_14974466606"
-    },
-    {
-      "source": "amazon",
-      "raw_text": "Worth every penny — this tool saved me $200 in one month",
-      "engagement": 0.5063,
-      "category": "lifestyle",
-      "timestamp": "2025-05-01T08:00:00+00:00",
-      "url": "https://www.amazon.com/dp/B864319153",
-      "external_id": "amz_B864319153"
     },
     {
       "source": "google_trends",
@@ -525,7 +390,7 @@
       "source_url": "https://www.amazon.com/dp/B082155501",
       "external_id": "amz_B082155501",
       "engagement": 0.78,
-      "rank_score": 0.8149,
+      "rank_score": 0.8107,
       "hook_variant": 1,
       "ready_for_ads": true
     },
@@ -538,7 +403,7 @@
       "source_url": "https://www.amazon.com/dp/B819606039",
       "external_id": "amz_B819606039",
       "engagement": 0.7379,
-      "rank_score": 0.7721,
+      "rank_score": 0.7637,
       "hook_variant": 1,
       "ready_for_ads": true
     },
@@ -551,7 +416,7 @@
       "source_url": "https://www.amazon.com/dp/B006205309",
       "external_id": "amz_B006205309",
       "engagement": 0.7343,
-      "rank_score": 0.7602,
+      "rank_score": 0.7474,
       "hook_variant": 1,
       "ready_for_ads": true
     },
@@ -564,7 +429,7 @@
       "source_url": "https://www.youtube.com/watch?v=20605875719",
       "external_id": "yt_20605875719",
       "engagement": 0.733,
-      "rank_score": 0.75,
+      "rank_score": 0.7331,
       "hook_variant": 1,
       "ready_for_ads": true
     },
@@ -577,215 +442,124 @@
       "source_url": "https://www.amazon.com/dp/B446986140",
       "external_id": "amz_B446986140",
       "engagement": 0.7223,
-      "rank_score": 0.7324,
+      "rank_score": 0.7112,
       "hook_variant": 1,
       "ready_for_ads": true
     },
     {
-      "headline": "Stop what you're doing — How to save $111 monthly — forget the $600 Vitamix buy ",
-      "primary_text": "Stop what you're doing — How to save $111 monthly — forget the $600 Vitamix buy this $89 blende | Engagement score: 0.69",
-      "call_to_action": "See Reviews",
-      "category": "review",
-      "source": "amazon",
-      "source_url": "https://www.amazon.com/dp/B177515106",
-      "external_id": "amz_B177515106",
-      "engagement": 0.6894,
-      "rank_score": 0.697,
-      "hook_variant": 1,
-      "ready_for_ads": true
-    },
-    {
-      "headline": "The secret nobody tells you: how to make money with automation and ChatGPT",
-      "primary_text": "The secret nobody tells you: how to make money with automation and ChatGPT | Engagement score: 0.66",
+      "headline": "Stop what you're doing — how to make money with automation and ChatGPT",
+      "primary_text": "Stop what you're doing — how to make money with automation and ChatGPT | Engagement score: 0.66",
       "call_to_action": "Start Saving Today",
       "category": "finance",
       "source": "google_trends",
       "source_url": "https://trends.google.com/trends/explore?q=how%20to%20make%20money%20with%20automation%20and%20ChatGPT",
       "external_id": "gt_289634869838",
       "engagement": 0.6577,
-      "rank_score": 0.6625,
+      "rank_score": 0.6462,
       "hook_variant": 1,
       "ready_for_ads": true
     },
     {
-      "headline": "Everyone is switching because: Save $80/month — reusable produce bags worth ever",
-      "primary_text": "Everyone is switching because: Save $80/month — reusable produce bags worth every penny | Engagement score: 0.64",
-      "call_to_action": "Discover More",
-      "category": "lifestyle",
-      "source": "amazon",
-      "source_url": "https://www.amazon.com/dp/B971950745",
-      "external_id": "amz_B971950745",
-      "engagement": 0.641,
-      "rank_score": 0.6401,
-      "hook_variant": 1,
-      "ready_for_ads": true
-    },
-    {
-      "headline": "Here's why this matters: Productivity wins: blue light glasses worth buying at t",
-      "primary_text": "Here's why this matters: Productivity wins: blue light glasses worth buying at this price point | Engagement score: 0.60",
-      "call_to_action": "Discover More",
-      "category": "lifestyle",
-      "source": "amazon",
-      "source_url": "https://www.amazon.com/dp/B262885909",
-      "external_id": "amz_B262885909",
-      "engagement": 0.602,
-      "rank_score": 0.5998,
-      "hook_variant": 1,
-      "ready_for_ads": true
-    },
-    {
-      "headline": "You won't believe this: My secret to getting 10x results in half the time",
-      "primary_text": "You won't believe this: My secret to getting 10x results in half the time | Engagement score: 0.58",
+      "headline": "The secret nobody tells you: My secret to getting 10x results in half the time",
+      "primary_text": "The secret nobody tells you: My secret to getting 10x results in half the time | Engagement score: 0.58",
       "call_to_action": "Try It Free",
       "category": "productivity",
       "source": "tiktok",
       "source_url": "https://www.tiktok.com/@creator0498/video/739609042114",
       "external_id": "tt_215739609042114",
       "engagement": 0.5768,
-      "rank_score": 0.5705,
+      "rank_score": 0.5681,
       "hook_variant": 1,
       "ready_for_ads": true
     },
     {
-      "headline": "Stop what you're doing — The only sales tool worth buying in 2025 — copy this sc",
-      "primary_text": "Stop what you're doing — The only sales tool worth buying in 2025 — copy this script to earn | Engagement score: 0.56",
+      "headline": "Everyone is switching because: The only sales tool worth buying in 2025 — copy t",
+      "primary_text": "Everyone is switching because: The only sales tool worth buying in 2025 — copy this script to earn | Engagement score: 0.56",
       "call_to_action": "Grow Your Business",
       "category": "marketing",
       "source": "linkedin",
       "source_url": "https://www.linkedin.com/feed/update/urn:li:activity:724812144146010097/",
       "external_id": "li_724812144146010097",
       "engagement": 0.564,
-      "rank_score": 0.5512,
+      "rank_score": 0.5445,
       "hook_variant": 1,
       "ready_for_ads": true
     },
     {
-      "headline": "The secret nobody tells you: best productivity app 2025 review",
-      "primary_text": "The secret nobody tells you: best productivity app 2025 review | Engagement score: 0.56",
+      "headline": "Here's why this matters: best productivity app 2025 review",
+      "primary_text": "Here's why this matters: best productivity app 2025 review | Engagement score: 0.56",
       "call_to_action": "Try It Free",
       "category": "productivity",
       "source": "google",
       "source_url": "https://www.google.com/search?q=best+productivity+app+2025+review",
       "external_id": "goog_228509279377",
       "engagement": 0.5563,
-      "rank_score": 0.5359,
+      "rank_score": 0.525,
       "hook_variant": 1,
       "ready_for_ads": true
     },
     {
-      "headline": "Everyone is switching because: how to scale a dropshipping business in 2025",
-      "primary_text": "Everyone is switching because: how to scale a dropshipping business in 2025 | Engagement score: 0.55",
+      "headline": "You won't believe this: how to scale a dropshipping business in 2025",
+      "primary_text": "You won't believe this: how to scale a dropshipping business in 2025 | Engagement score: 0.55",
       "call_to_action": "Shop Now",
       "category": "ecommerce",
       "source": "google_trends",
       "source_url": "https://trends.google.com/trends/explore?q=how%20to%20scale%20a%20dropshipping%20business%20in%202025",
       "external_id": "gt_860767772404",
       "engagement": 0.5532,
-      "rank_score": 0.5244,
+      "rank_score": 0.5092,
       "hook_variant": 1,
       "ready_for_ads": true
     },
     {
-      "headline": "Here's why this matters: Our retention tool earned 95% growth — the secret produ",
-      "primary_text": "Here's why this matters: Our retention tool earned 95% growth — the secret product change | Engagement score: 0.54",
+      "headline": "Stop what you're doing — Our retention tool earned 95% growth — the secret produ",
+      "primary_text": "Stop what you're doing — Our retention tool earned 95% growth — the secret product change | Engagement score: 0.54",
       "call_to_action": "Scale Now",
       "category": "business",
       "source": "linkedin",
       "source_url": "https://www.linkedin.com/feed/update/urn:li:activity:031965560092595705/",
       "external_id": "li_031965560092595705",
       "engagement": 0.5434,
-      "rank_score": 0.5074,
+      "rank_score": 0.4881,
       "hook_variant": 1,
       "ready_for_ads": true
     },
     {
-      "headline": "You won't believe this: Review: is this $49 course actually worth it?",
-      "primary_text": "You won't believe this: Review: is this $49 course actually worth it? | Engagement score: 0.53",
-      "call_to_action": "See Reviews",
-      "category": "review",
-      "source": "youtube",
-      "source_url": "https://www.youtube.com/watch?v=71472565622",
-      "external_id": "yt_71472565622",
-      "engagement": 0.5292,
-      "rank_score": 0.487,
-      "hook_variant": 1,
-      "ready_for_ads": true
-    },
-    {
-      "headline": "Stop what you're doing — how to earn from real estate with no money hack",
-      "primary_text": "Stop what you're doing — how to earn from real estate with no money hack | Engagement score: 0.53",
+      "headline": "The secret nobody tells you: how to earn from real estate with no money hack",
+      "primary_text": "The secret nobody tells you: how to earn from real estate with no money hack | Engagement score: 0.53",
       "call_to_action": "Start Saving Today",
       "category": "finance",
       "source": "google_trends",
       "source_url": "https://trends.google.com/trends/explore?q=how%20to%20earn%20from%20real%20estate%20with%20no%20money%20hack",
       "external_id": "gt_916554555670",
       "engagement": 0.5285,
-      "rank_score": 0.4773,
+      "rank_score": 0.4628,
       "hook_variant": 1,
       "ready_for_ads": true
     },
     {
-      "headline": "The secret nobody tells you: Amazon's best-seller notebook — worth buying 10 at ",
-      "primary_text": "The secret nobody tells you: Amazon's best-seller notebook — worth buying 10 at a time | Engagement score: 0.52",
-      "call_to_action": "Try It Free",
-      "category": "productivity",
-      "source": "amazon",
-      "source_url": "https://www.amazon.com/dp/B440943723",
-      "external_id": "amz_B440943723",
-      "engagement": 0.518,
-      "rank_score": 0.4599,
-      "hook_variant": 1,
-      "ready_for_ads": true
-    },
-    {
-      "headline": "Everyone is switching because: The stock market hack that changed my portfolio",
-      "primary_text": "Everyone is switching because: The stock market hack that changed my portfolio | Engagement score: 0.51",
-      "call_to_action": "Start Saving Today",
-      "category": "finance",
-      "source": "youtube",
-      "source_url": "https://www.youtube.com/watch?v=14974466606",
-      "external_id": "yt_14974466606",
-      "engagement": 0.5063,
-      "rank_score": 0.4414,
-      "hook_variant": 1,
-      "ready_for_ads": true
-    },
-    {
-      "headline": "Here's why this matters: Worth every penny — this tool saved me $200 in one mont",
-      "primary_text": "Here's why this matters: Worth every penny — this tool saved me $200 in one month | Engagement score: 0.51",
-      "call_to_action": "Discover More",
-      "category": "lifestyle",
-      "source": "amazon",
-      "source_url": "https://www.amazon.com/dp/B864319153",
-      "external_id": "amz_B864319153",
-      "engagement": 0.5063,
-      "rank_score": 0.4323,
-      "hook_variant": 1,
-      "ready_for_ads": true
-    },
-    {
-      "headline": "You won't believe this: best productivity system and automation tools for entrep",
-      "primary_text": "You won't believe this: best productivity system and automation tools for entrepreneurs | Engagement score: 0.51",
+      "headline": "Everyone is switching because: best productivity system and automation tools for",
+      "primary_text": "Everyone is switching because: best productivity system and automation tools for entrepreneurs | Engagement score: 0.51",
       "call_to_action": "Try It Free",
       "category": "productivity",
       "source": "google_trends",
       "source_url": "https://trends.google.com/trends/explore?q=best%20productivity%20system%20and%20automation%20tools%20for%20entrepreneurs",
       "external_id": "gt_559979085434",
       "engagement": 0.5053,
-      "rank_score": 0.4224,
+      "rank_score": 0.4309,
       "hook_variant": 1,
       "ready_for_ads": true
     },
     {
-      "headline": "Stop what you're doing — The hiring tool every founder needs — worth the price t",
-      "primary_text": "Stop what you're doing — The hiring tool every founder needs — worth the price to scale faster | Engagement score: 0.50",
+      "headline": "Here's why this matters: The hiring tool every founder needs — worth the price t",
+      "primary_text": "Here's why this matters: The hiring tool every founder needs — worth the price to scale faster | Engagement score: 0.50",
       "call_to_action": "Scale Now",
       "category": "business",
       "source": "linkedin",
       "source_url": "https://www.linkedin.com/feed/update/urn:li:activity:234508261213359121/",
       "external_id": "li_234508261213359121",
       "engagement": 0.5022,
-      "rank_score": 0.4109,
+      "rank_score": 0.4151,
       "hook_variant": 1,
       "ready_for_ads": true
     }
