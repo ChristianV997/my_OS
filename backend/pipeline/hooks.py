@@ -17,11 +17,12 @@ def generate_hooks(signals: list[BaseSignal]) -> list[dict]:
         template = _TEMPLATES[i % len(_TEMPLATES)]
         hook_text = sig["raw_text"][:70]
         hooks.append({
-            "hook": template.format(text=hook_text),
-            "source": sig["source"],
-            "category": sig["category"],
+            "hook":       template.format(text=hook_text),
+            "raw_text":   sig["raw_text"],
+            "source":     sig["source"],
+            "category":   sig["category"],
             "engagement": sig["engagement"],
             "external_id": sig["external_id"],
-            "url": sig["url"],
+            "url":        sig["url"],
         })
     return hooks
